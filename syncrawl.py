@@ -2,11 +2,13 @@ import requests
 from lxml import etree
 
 import hashlib
+import bisect
 from collections import deque
 from abc import abstractmethod
 import json
 import os
 from datetime import datetime
+import argparse
 import time
 import pdb
 
@@ -47,8 +49,8 @@ class HTTPDownloader:
         if content is None:
             time.sleep(1)
             html = requests.get(url)
-            content = html.content
-            self._cache.save_cache(url, content)
+            content = html.content.decode()
+            self._cache.store_cache(url, content)
         parser = etree.HTMLParser()
         root = etree.fromstring(content, parser)
         return root
@@ -169,9 +171,9 @@ class Page(JSONSerializable):
 
     @classmethod
     def from_json(cls, obj):
-        if obj['name'] not in self._registry:
+        if obj['name'] not in cls._registry:
             raise ValueError(f"Unknown page: {obj['name']}")
-        page_cls = self._registry[obj['name']]
+        page_cls = cls._registry[obj['name']]
         key = Key.from_json(obj['key'])
         return page_cls(key)
 
@@ -229,6 +231,7 @@ class RequestQueue:
     def remove_request(self, request):
         idx = self._request_queue.index(request)
         del self._request_queue[idx]
+        self._queued_pages.remove(request.page)
 
     def get_next_request(self):
         request = None
@@ -237,8 +240,7 @@ class RequestQueue:
         while request is None:
             next_request = self._request_queue[0]
             if next_request.ready():
-                request = self._request_queue.popleft()
-                self._queued_pages.remove(request.page)
+                request = self._request_queue[0]
             else:
                 time.sleep(1)
         return request
@@ -252,53 +254,54 @@ class Datalog:
 
     def _write(self, msg):
         msg["datetime"] = datetime.now().strftime(self.datetime_format)
-        with open(self._fpath, 'w') as f:
+        with open(self._fpath, 'a') as f:
             print(json.dumps(msg), file=f)
 
     def read(self):
         msgs = []
-        with open(self._fpath, 'r') as f:
-            for ln in f:
-                msg = json.loads(ln)
-                for key, value in msg.items():
-                    if key == "page":
-                        msg[key] = Page.from_json(value)
-                    elif key == "item":
-                        msg[key] = Key.from_json(value)
-                    elif key == "request":
-                        msg[key] = PageRequest.from_json(value)
-                if "datetime" in msg:
-                    msg["datetime"] = datetime.strptime(msg["datetime"], self.datetime_format)
-                msgs.append(msg)
+        if os.path.isfile(self._fpath):
+            with open(self._fpath, 'r') as f:
+                for ln in f:
+                    msg = json.loads(ln)
+                    for key, value in msg.items():
+                        if key == "page":
+                            msg[key] = Page.from_json(value)
+                        elif key == "item":
+                            msg[key] = Key.from_json(value)
+                        elif key == "request":
+                            msg[key] = PageRequest.from_json(value)
+                    if "datetime" in msg:
+                        msg["datetime"] = datetime.strptime(msg["datetime"], self.datetime_format)
+                    msgs.append(msg)
         return msgs
 
-    def write_add_item(item, page):
+    def write_add_item(self, item, page):
         self._write({
             "event": "ADD_ITEM",
             "page": page.to_json(),
             "item": item.to_json(),
         })
 
-    def write_delete_item(item_id, page):
+    def write_delete_item(self, item_id, page):
         self._write({
             "event": "DEL_ITEM",
             "page": page.to_json(),
             "item_id": item_id,
         })
 
-    def write_add_request(request):
+    def write_add_request(self, request):
         self._write({
             "event": "ADD_REQUEST",
             "request": request.to_json(),
         })
 
-    def write_end_request(request):
+    def write_end_request(self, request):
         self._write({
             "event": "END_REQUEST",
             "request": request.to_json(),
         })
 
-    def write_forget_page(page):
+    def write_forget_page(self, page):
         self._write({
             "event": "FORGET_PAGE",
             "page": page.to_json(),
@@ -327,7 +330,7 @@ class Crawler:
         self._forgotten_pages = set()
         
     def _load_state(self):
-        for msg in self_datalog.read():
+        for msg in self._datalog.read():
             if msg['event'] == "ADD_ITEM": # item, page
                 self._add_item(msg['item'], msg['page'], log=False)
             elif msg['event'] == "DEL_ITEM": # item, page
@@ -353,19 +356,19 @@ class Crawler:
             self._page_items[page].remove(item_id)
 
     def _add_request(self, request, log=True):
-        if request.next_update is None:
-            self._forget_page(equet.page, log=log)
+        if request.next_timestamp is None:
+            self._forget_page(request.page, log=log)
         if request.page not in self._forgotten_pages:
             added = self._request_queue.add_request(request)
             if log and added:
                 self._datalog.write_add_request(request)
 
-    def _end_request(request, log=True):
+    def _end_request(self, request, log=True):
         if log:
             self._datalog.write_end_request(request)
         self._request_queue.remove_request(request)
         
-    def _forget_page(page, log=True):
+    def _forget_page(self, page, log=True):
         if log:
             self._datalog.write_forget_page(page)
         self._forgotten_pages.add(page)
@@ -384,31 +387,41 @@ class Crawler:
         html = self._downloader.download(request.page.url())
         output = request.page.parse(html, request.metadata)
         last_timestamp = request.next_timestamp
-        next_timestamp = request.page.next_update(last_timestamp, output.metadata)
-        if next_timestamp is not None:
-            new_request = PageRequest(request.page, last_timestamp, next_timestamp, request.metadata)
-            self._add_request(new_request)
-        else:
-            self._forget_page(page)
         if len(output._items) > 0:
             self._produce_items(output._items, request.page)
         for page in output._pages:
             new_request = PageRequest(page, last_timestamp, time.time(), output.metadata)
             self._add_request(new_request)
+
+        self._end_request(request)
+
+        next_timestamp = request.page.next_update(last_timestamp, output.metadata)
+        if next_timestamp is not None:
+            new_request = PageRequest(request.page, last_timestamp, next_timestamp, request.metadata)
+            self._add_request(new_request)
+        else:
+            self._forget_page(request.page)
     
     def sync(self, root_pages):
         self._load_state()
         
         for page in root_pages:
-            self.add_request(PageRequest(page, None, time.time(), {}))
+            self._add_request(PageRequest(page, None, time.time(), {}))
         
         while True:
             request = self._request_queue.get_next_request()
             if request is None:
                 return
             self.process_request(request)
-            self._end_request(request)
 
+
+
+class Syncrawl:
+    def __init__(self):
+        self.crawler = Crawler(DATALOG_FPATH, CACHE_PATH)
+
+    def run(self):
+        crawler.sync(root_pages)
             
 DATALOG_FPATH = "/tmp/log.json"
 CACHE_PATH = "/tmp/cache"
@@ -418,38 +431,10 @@ root_pages = []
 def root_page(keys):
     def wrapper(page_cls):
         for key in keys:
-            root_pages.append(page_cls(key))
+            root_pages.append(page_cls(Key(key)))
         return page_cls
     return wrapper
 
 def register_page(page_cls):
     Page.register_page(page_cls.name, page_cls)
     return page_cls
-
-
-@root_page([{"id":1}])
-@register_page
-class Calendar(Page):
-    name = "calendar"
-    
-    def url(self):
-        return "https://www.procyclingstats.com/races.php"
-
-    def next_update(self, last_update, metadata):
-        return None
-        
-    def parse(self, html, metadata):
-        return ParsingOutput()
-
-@register_page
-class CalendarYear(Page):
-    name = "calendar_year"
-    
-    def url(self):
-        return f"https://www.procyclingstats.com/races.php?{self._key['year']}"
-
-    def next_update(self, last_update, metadata):
-        return None
-
-    def parse(self, html, metadata):
-        return ParsingOutput()

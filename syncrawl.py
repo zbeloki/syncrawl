@@ -17,6 +17,15 @@ import pdb
 # Interfaze bat eskeini Item objektuak bakarrik kargatuko dituena, esportazioak egiteko.
 # Datetime-ekin, edozein uneko egoerara itzuli daiteke erraz
 
+class Utils:
+    @classmethod
+    def are_all_scalar(cls, dictionary):
+        scalar_types = (int, float, str, bool)  # Add more scalar types as needed
+        for value in dictionary.values():
+            if not isinstance(value, scalar_types):
+                return False
+        return True
+    
 class CacheManager:
     def __init__(self, path):
         os.makedirs(path, exist_ok=True)
@@ -101,11 +110,21 @@ class Item(JSONSerializable):
 
     
 class Key(JSONSerializable):
-    def __init__(self, values):
-        self._values = values
+    def __init__(self, **kwargs):
+        if kwargs == {}:
+            raise ValueError("Key must not be empty")
+        if not Utils.are_all_scalar(kwargs):
+            raise TypeError("All Key parameter values must be scalar")
+        self._values = kwargs
+
+    def __getattr__(self, name):
+        if name in self._values:
+            return self._values[name]
+        else:
+            raise AttributeError(f"Keys have no attribute '{name}'")
 
     def __str__(self):
-        return '__'.join([ f"{k}::{self._values[k]}" for k in sorted(self._values.keys()) ])
+        return '_'.join([ f"{k}:{self._values[k]}" for k in sorted(self._values.keys()) ])
     
     def __hash__(self):
         return hash(str(self))
@@ -121,7 +140,7 @@ class Key(JSONSerializable):
 
     @classmethod
     def from_json(cls, obj):
-        return cls(obj)
+        return cls(**obj)
 
     
 class Page(JSONSerializable):

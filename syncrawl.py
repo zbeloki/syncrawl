@@ -4,6 +4,7 @@ from lxml import etree
 import hashlib
 import bisect
 from collections import deque
+import abc
 from abc import abstractmethod
 import json
 import os
@@ -23,6 +24,9 @@ class Utils:
         scalar_types = (int, float, str, bool)  # Add more scalar types as needed
         for value in dictionary.values():
             if not isinstance(value, scalar_types):
+                return False
+        for key in dictionary.keys():
+            if not isinstance(key, str):
                 return False
         return True
     
@@ -65,7 +69,7 @@ class HTTPDownloader:
         return root
 
     
-class JSONSerializable:
+class JSONSerializable(abc.ABC):
     @abstractmethod
     def to_json(self):
         pass
@@ -81,6 +85,14 @@ class Item(JSONSerializable):
         self._id = id_
         self._type = type_
         self._attribs = { k:v for k, v in attribs.items() }
+
+    @property
+    def id(self):
+        return self._id
+
+    @property
+    def type(self):
+        return self._type
         
     def __str__(self):
         return "[" + self._id + "]" + f"<{self._type}>" + '__'.join([ f"{k}::{self._attribs[k]}" for k in sorted(self._attribs.keys()) ])
@@ -105,7 +117,7 @@ class Item(JSONSerializable):
 
     @classmethod
     def from_json(cls, obj):
-        attribs = { key: value for key, value in obj if not key.startswith("_") }
+        attribs = { key: value for key, value in obj.items() if not key.startswith("_") }
         return cls(obj["_id"], obj["_type"], attribs)
 
     
@@ -154,6 +166,10 @@ class Page(JSONSerializable):
         cls._registry[page_name] = page_cls
 
     @property
+    def key(self):
+        return self._key
+
+    @property
     @abstractmethod
     def name(self):
         pass
@@ -198,14 +214,32 @@ class Page(JSONSerializable):
 
     
 class PageRequest(JSONSerializable):
-    def __init__(self, page, last_timestamp, next_timestamp, metadata):
-        self.page = page
-        self.last_timestamp = last_timestamp
-        self.next_timestamp = next_timestamp
-        self.metadata = metadata
+    def __init__(self, page, last_timestamp, next_timestamp, metadata={}):
+        if next_timestamp is None or (last_timestamp is not None and next_timestamp <= last_timestamp):
+            raise ValueError("next_timestamp must contain a value greater than last_timestamp")
+        self._page = page
+        self._last_timestamp = last_timestamp
+        self._next_timestamp = next_timestamp
+        self._metadata = metadata
+
+    @property
+    def page(self):
+        return self._page
+
+    @property
+    def last_timestamp(self):
+        return self._last_timestamp
+
+    @property
+    def next_timestamp(self):
+        return self._next_timestamp
+
+    @property
+    def metadata(self):
+        return self._metadata
 
     def ready(self):
-        return time.time() > self.next_timestamp
+        return time.time() >= self.next_timestamp
 
     def __str__(self):
         return f"{str(self.page)}__next:{self.next_timestamp}"
@@ -223,6 +257,7 @@ class PageRequest(JSONSerializable):
         return {
             "page": self.page.to_json(),
             "last_timestamp": self.last_timestamp,
+            "next_timestamp": self.next_timestamp,
             "metadata": "NOT_IMPLEMENTED",
         }
 
@@ -231,7 +266,7 @@ class PageRequest(JSONSerializable):
         page = Page.from_json(obj["page"])
         metadata = None
         last_timestamp = obj["last_timestamp"]
-        next_timestamp = page.next_update(last_timestamp, metadata)
+        next_timestamp = obj["next_timestamp"]
         return cls(page, last_timestamp, next_timestamp, metadata)
 
 
@@ -286,7 +321,7 @@ class Datalog:
                         if key == "page":
                             msg[key] = Page.from_json(value)
                         elif key == "item":
-                            msg[key] = Key.from_json(value)
+                            msg[key] = Item.from_json(value)
                         elif key == "request":
                             msg[key] = PageRequest.from_json(value)
                     if "datetime" in msg:
@@ -333,6 +368,14 @@ class ParsingOutput:
         self._pages = []
         self.metadata = {}
 
+    @property
+    def items(self):
+        return self._items
+
+    @property
+    def pages(self):
+        return self._pages
+    
     def add_item(self, item):
         self._items.append(item)
 
@@ -341,6 +384,8 @@ class ParsingOutput:
 
     
 class Crawler:
+    _root_pages = []
+    
     def __init__(self, datalog_fpath, cache_path):
         self._downloader = HTTPDownloader(cache_path)
         self._datalog = Datalog(datalog_fpath)
@@ -373,10 +418,10 @@ class Crawler:
             self._datalog.write_delete_item(item_id, page)
         if page in self._page_items and item_id in self._page_items[page]:
             self._page_items[page].remove(item_id)
+            if len(self._page_items[page]) == 0:
+                del self._page_items[page]
 
     def _add_request(self, request, log=True):
-        if request.next_timestamp is None:
-            self._forget_page(request.page, log=log)
         if request.page not in self._forgotten_pages:
             added = self._request_queue.add_request(request)
             if log and added:
@@ -396,7 +441,7 @@ class Crawler:
         item_ids = set([ item._id for item in items ])
         if page not in self._page_items:
             self._page_items[page] = set()
-        for prev_item_id in self._page_items[page]:
+        for prev_item_id in set(self._page_items[page]):
             if prev_item_id not in item_ids:
                 self._delete_item(prev_item_id, page)
         for item in items:
@@ -421,10 +466,10 @@ class Crawler:
         else:
             self._forget_page(request.page)
     
-    def sync(self, root_pages):
+    def sync(self):
         self._load_state()
         
-        for page in root_pages:
+        for page in self._root_pages:
             self._add_request(PageRequest(page, None, time.time(), {}))
         
         while True:
@@ -434,23 +479,10 @@ class Crawler:
             self.process_request(request)
 
 
-
-class Syncrawl:
-    def __init__(self):
-        self.crawler = Crawler(DATALOG_FPATH, CACHE_PATH)
-
-    def run(self):
-        crawler.sync(root_pages)
-            
-DATALOG_FPATH = "/tmp/log.json"
-CACHE_PATH = "/tmp/cache"
-crawler = Crawler(DATALOG_FPATH, CACHE_PATH)
-root_pages = []
-
 def root_page(keys):
     def wrapper(page_cls):
         for key in keys:
-            root_pages.append(page_cls(Key(key)))
+            Crawler._root_pages.append(page_cls(Key(**key)))
         return page_cls
     return wrapper
 

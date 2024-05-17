@@ -259,7 +259,7 @@ class PageRequest(JSONSerializable):
 
     def __str__(self):
         date = datetime.fromtimestamp(self.next_timestamp)
-        return f"{str(self.page)}(PT: {date.strftime('%Y-%m-%d %H:%M:%S')})"
+        return f"{str(self.page)}(PT:{date.strftime('%Y-%m-%d_%H:%M:%S')})"
 
     def __hash__(self):
         return hash(self.page)

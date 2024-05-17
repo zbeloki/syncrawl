@@ -179,7 +179,7 @@ def test_page_request_basic():
     time.time = lambda: 1.21
     assert pr.ready() is True
     time.time = f_time
-    assert str(pr) == f"{str(p)}(PT: {datetime.fromtimestamp(1.2).strftime('%Y-%m-%d %H:%M:%S')})"
+    assert str(pr) == f"{str(p)}(PT:{datetime.fromtimestamp(1.2).strftime('%Y-%m-%d_%H:%M:%S')})"
     assert hash(pr) == hash(p)
     pr2 = PageRequest(A(Key(id=2)), 1, 1.2)
     assert hash(pr) != hash(pr2)

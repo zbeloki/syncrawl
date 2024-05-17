@@ -54,20 +54,32 @@ class CacheManager:
 
         
 class HTTPDownloader:
-    def __init__(self, cache_path):
-        self._cache = CacheManager(cache_path)
+    def __init__(self, cache_path, request_delay):
+        self._cache = None
+        if cache_path is not None:
+            self._cache = CacheManager(cache_path)
+        self._request_delay = request_delay
+        self._last_request = None
 
     def download(self, url):
-        content = self._cache.retrieve_cached(url)
+        content = None
+        if self._cache is not None:
+            content = self._cache.retrieve_cached(url)
         if content is None:
-            time.sleep(1)
+            self._wait()
             html = requests.get(url)
+            self._last_request = time.time()
             content = html.content.decode()
-            self._cache.store_cache(url, content)
+            if self._cache is not None:
+                self._cache.store_cache(url, content)
         parser = etree.HTMLParser()
         root = etree.fromstring(content, parser)
         return root
 
+    def _wait(self):
+        while time.time() < self._last_request + self._request_delay:
+            time.sleep(0.1)
+            
     
 class JSONSerializable(abc.ABC):
     @abstractmethod
@@ -386,8 +398,8 @@ class ParsingOutput:
 class Crawler:
     _root_pages = []
     
-    def __init__(self, datalog_fpath, cache_path):
-        self._downloader = HTTPDownloader(cache_path)
+    def __init__(self, datalog_fpath, cache_path=None, request_delay=0):
+        self._downloader = HTTPDownloader(cache_path, request_delay)
         self._datalog = Datalog(datalog_fpath)
         self._request_queue = RequestQueue()
         self._page_items = {}

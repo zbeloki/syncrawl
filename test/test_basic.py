@@ -304,7 +304,7 @@ def test_crawler_basic():
     pr4 = PageRequest(p4, 10, 11)
     with NamedTemporaryFile(mode='w') as f_log, \
          TemporaryDirectory() as tmp:
-        crawler = Crawler(f_log.name, tmp)
+        crawler = Crawler(f_log.name, tmp, 0)
         crawler._add_item(i1, p1)
         assert p1 in crawler._page_items
         assert crawler._page_items[p1] == set(["car_1"])
@@ -337,7 +337,7 @@ def test_crawler_basic():
         with open(f_log.name, 'r') as f_log_r:
             n_events = len(f_log_r.readlines())
         # load 2. crawler
-        crawler2 = Crawler(f_log.name, tmp)
+        crawler2 = Crawler(f_log.name, tmp, 0)
         crawler2._load_state()
         assert crawler2._forgotten_pages == set([p1])
         assert len(crawler2._request_queue._request_queue) == 2

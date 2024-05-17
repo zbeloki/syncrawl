@@ -1,1 +1,1 @@
-from syncrawl.syncrawl import * 
+from .syncrawl import * 

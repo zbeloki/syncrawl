@@ -258,7 +258,8 @@ class PageRequest(JSONSerializable):
         return time.time() >= self.next_timestamp
 
     def __str__(self):
-        return f"{str(self.page)}({self.next_timestamp})"
+        date = datetime.fromtimestamp(self.next_timestamp)
+        return f"{str(self.page)}(PT: {date.strftime('%Y-%m-%d %H:%M:%S')})"
 
     def __hash__(self):
         return hash(self.page)
@@ -442,6 +443,7 @@ class Crawler:
             added = self._request_queue.add_request(request)
             if log and added:
                 self._datalog.write_add_request(request)
+                logging.info(f"New request {request} added")
 
     def _end_request(self, request, log=True):
         if log:
@@ -475,7 +477,6 @@ class Crawler:
         for page in output._pages:
             new_request = PageRequest(page, last_timestamp, time.time(), output.metadata)
             self._add_request(new_request)
-            logging.info(f"New request {new_request} added")
 
         self._end_request(request)
 
@@ -483,7 +484,6 @@ class Crawler:
         if next_timestamp is not None:
             new_request = PageRequest(request.page, last_timestamp, next_timestamp, request.metadata)
             self._add_request(new_request)
-            logging.info(f"Request {new_request} added back for updating")
         else:
             self._forget_page(request.page)
             logging.info(f"Page {request.page} added to forget list")

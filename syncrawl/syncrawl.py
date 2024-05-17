@@ -9,6 +9,7 @@ from abc import abstractmethod
 import json
 import os
 from datetime import datetime
+from inspect import isclass
 import logging
 import argparse
 import time
@@ -174,7 +175,7 @@ class Key(JSONSerializable):
 class Page(JSONSerializable):
     _registry = {}
     
-    def __init__(self, key):
+    def __init__(self, key=None):
         self._key = key
 
     @classmethod
@@ -203,7 +204,8 @@ class Page(JSONSerializable):
         pass
 
     def __str__(self):
-        return "<" + self.name + ">" + str(self._key)
+        key_str = str(self._key) if self._key is not None else ""
+        return "<" + self.name + ">" + key_str
     
     def __hash__(self):
         return hash(str(self))
@@ -217,7 +219,7 @@ class Page(JSONSerializable):
     def to_json(self):
         return {
             "name": self.name,
-            "key": self._key.to_json(),
+            "key": self._key.to_json() if self._key is not None else None,
         }
 
     @classmethod
@@ -225,7 +227,7 @@ class Page(JSONSerializable):
         if obj['name'] not in cls._registry:
             raise ValueError(f"Unknown page: {obj['name']}")
         page_cls = cls._registry[obj['name']]
-        key = Key.from_json(obj['key'])
+        key = Key.from_json(obj['key']) if obj['key'] is not None else None
         return page_cls(key)
 
     
@@ -502,11 +504,17 @@ class Crawler:
 
 
 def root_page(keys):
-    def wrapper(page_cls):
-        for key in keys:
-            Crawler._root_pages.append(page_cls(Key(**key)))
-        return page_cls
-    return wrapper
+    if isclass(keys):
+        # @root_page
+        page_cls = keys
+        Crawler._root_pages.append(page_cls())
+    else:
+        # @root_page([key])
+        def wrapper(page_cls):
+            for key in keys:
+                Crawler._root_pages.append(page_cls(Key(**key)))
+            return page_cls
+        return wrapper
 
 def register_page(page_cls):
     Page.register_page(page_cls.name, page_cls)

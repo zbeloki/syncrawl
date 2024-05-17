@@ -135,6 +135,7 @@ def test_page_subclass():
     p1 = A(k1)
     p2 = A(k2)
     p3 = A(k2)
+    p4 = A()
     assert p1.name == "a"
     assert p1.url() == "http://test.com/abc"
     assert p1.next_update(1, {}) == 2
@@ -149,6 +150,7 @@ def test_page_subclass():
         pb = B(k1)
     with pytest.raises(TypeError):
         pc = C(k1)
+    assert str(p4) == f"<a>"
     
 def test_page_serializable():
     p = A(Key(id=5, name="abc"))
@@ -156,6 +158,12 @@ def test_page_serializable():
     p_copy = Page.from_json(p_json)
     assert type(p_copy) == A
     assert p == p_copy
+    p = A()
+    p_json = p.to_json()
+    p_copy = Page.from_json(p_json)
+    assert type(p_copy) == A
+    assert p == p_copy
+    
     
 
 # PageRequest

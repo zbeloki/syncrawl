@@ -81,7 +81,7 @@ class HTTPDownloader:
         return root
 
     def _wait(self):
-        while time.time() < self._last_request + self._request_delay:
+        while self._last_request is not None and time.time() < self._last_request + self._request_delay:
             time.sleep(0.1)
             
     

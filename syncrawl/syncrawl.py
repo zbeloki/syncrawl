@@ -9,6 +9,7 @@ from abc import abstractmethod
 import json
 import os
 from datetime import datetime
+import logging
 import argparse
 import time
 import pdb
@@ -67,11 +68,14 @@ class HTTPDownloader:
             content = self._cache.retrieve_cached(url)
         if content is None:
             self._wait()
+            logging.info(f"Downloading: {url}")
             html = requests.get(url)
             self._last_request = time.time()
             content = html.content.decode()
             if self._cache is not None:
                 self._cache.store_cache(url, content)
+        else:
+            logging.info(f"Retrieving from cache: {url}")
         parser = etree.HTMLParser()
         root = etree.fromstring(content, parser)
         return root
@@ -107,7 +111,7 @@ class Item(JSONSerializable):
         return self._type
         
     def __str__(self):
-        return "[" + self._id + "]" + f"<{self._type}>" + '__'.join([ f"{k}::{self._attribs[k]}" for k in sorted(self._attribs.keys()) ])
+        return "[" + self._id + "]" + f"<{self._type}>{{" + ','.join([ f"{k}:{self._attribs[k]}" for k in sorted(self._attribs.keys()) ]) + "}"
     
     def __hash__(self):
         return hash(self._id)
@@ -148,7 +152,7 @@ class Key(JSONSerializable):
             raise AttributeError(f"Keys have no attribute '{name}'")
 
     def __str__(self):
-        return '_'.join([ f"{k}:{self._values[k]}" for k in sorted(self._values.keys()) ])
+        return "(" + ','.join([ f"{k}={self._values[k]}" for k in sorted(self._values.keys()) ]) + ")"
     
     def __hash__(self):
         return hash(str(self))
@@ -199,7 +203,7 @@ class Page(JSONSerializable):
         pass
 
     def __str__(self):
-        return "[" + self.name + "]" + str(self._key)
+        return "<" + self.name + ">" + str(self._key)
     
     def __hash__(self):
         return hash(str(self))
@@ -254,7 +258,7 @@ class PageRequest(JSONSerializable):
         return time.time() >= self.next_timestamp
 
     def __str__(self):
-        return f"{str(self.page)}__next:{self.next_timestamp}"
+        return f"{str(self.page)}({self.next_timestamp})"
 
     def __hash__(self):
         return hash(self.page)
@@ -455,11 +459,14 @@ class Crawler:
             self._page_items[page] = set()
         for prev_item_id in set(self._page_items[page]):
             if prev_item_id not in item_ids:
+                logging.info(f"Item {prev_item_id} deleted from page {page}")
                 self._delete_item(prev_item_id, page)
         for item in items:
             self._add_item(item, page)
+            logging.info(f"Item {item} created from page {page}")
 
     def process_request(self, request):
+        logging.info(f"Processing request {request}")
         html = self._downloader.download(request.page.url())
         output = request.page.parse(html, request.metadata)
         last_timestamp = request.next_timestamp
@@ -468,6 +475,7 @@ class Crawler:
         for page in output._pages:
             new_request = PageRequest(page, last_timestamp, time.time(), output.metadata)
             self._add_request(new_request)
+            logging.info(f"New request {new_request} added")
 
         self._end_request(request)
 
@@ -475,8 +483,10 @@ class Crawler:
         if next_timestamp is not None:
             new_request = PageRequest(request.page, last_timestamp, next_timestamp, request.metadata)
             self._add_request(new_request)
+            logging.info(f"Request {new_request} added back for updating")
         else:
             self._forget_page(request.page)
+            logging.info(f"Page {request.page} added to forget list")
     
     def sync(self):
         self._load_state()

@@ -37,7 +37,7 @@ def test_item_basic():
     i3 = Item("car_3_a", "car", {"wheels": 4, "windows": 3})
     assert i1.id == "car_1_a"
     assert i1.type == "car"
-    assert str(i1) == f"[car_1_a]<car>wheels::4__windows::3"
+    assert str(i1) == f"[car_1_a]<car>{{wheels:4,windows:3}}"
     assert hash(i1) == hash("car_1_a")
     assert len(set([i1, i2])) == 1
     assert len(set([i1, i2, i3])) == 2
@@ -61,7 +61,7 @@ def test_key_basic():
         k.tag
     with pytest.raises(ValueError):
         Key()
-    assert str(k) == "id:5_name:a"
+    assert str(k) == "(id=5,name=a)"
 
 def test_key_scalar_only():
     with pytest.raises(TypeError):
@@ -141,8 +141,8 @@ def test_page_subclass():
     assert len(p1.parse("html", {})._pages) == 1
     Page.register_page(p1.name, A)
     assert Page._registry == {"a": A}
-    assert str(p1) == f"[a]{str(p1.key)}"
-    assert hash(p1) == hash(f"[a]{str(p1.key)}")
+    assert str(p1) == f"<a>{str(p1.key)}"
+    assert hash(p1) == hash(f"<a>{str(p1.key)}")
     assert hash(p2) != hash(p1)
     assert hash(p2) == hash(p3)
     with pytest.raises(TypeError):
@@ -179,7 +179,7 @@ def test_page_request_basic():
     time.time = lambda: 1.21
     assert pr.ready() is True
     time.time = f_time
-    assert str(pr) == f"{str(p)}__next:1.2"
+    assert str(pr) == f"{str(p)}(1.2)"
     assert hash(pr) == hash(p)
     pr2 = PageRequest(A(Key(id=2)), 1, 1.2)
     assert hash(pr) != hash(pr2)

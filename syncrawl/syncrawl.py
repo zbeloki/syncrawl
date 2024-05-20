@@ -181,6 +181,12 @@ class Page(JSONSerializable):
     _registry = {}
     
     def __init__(self, key=None, **kwargs):
+        for attrib_name in [ "page_name", "url", "next_update", "parse", "to_json", "from_json" ]:
+            if (
+                    (key is not None and attrib_name in key._values.keys()) or
+                    (attrib_name in kwargs.keys())
+            ):
+                raise ValueError("page_name is a reserved attribute name")
         self._key = key
         # @: assert all kwargs are scalar?
         self._kwargs = kwargs
@@ -196,12 +202,14 @@ class Page(JSONSerializable):
     def __getattr__(self, name):
         if name in self._kwargs:
             return self._kwargs[name]
+        elif name in self.key._values:
+            return getattr(self.key, name)
         else:
             raise AttributeError(f"Page {self.name} have no attribute '{name}'")
         
     @property
     @abstractmethod
-    def name(self):
+    def page_name(self):
         pass
     
     @abstractmethod
@@ -218,7 +226,7 @@ class Page(JSONSerializable):
 
     def __str__(self):
         key_str = str(self._key) if self._key is not None else ""
-        return "<" + self.name + ">" + key_str
+        return "<" + self.page_name + ">" + key_str
     
     def __hash__(self):
         return hash(str(self))
@@ -231,16 +239,16 @@ class Page(JSONSerializable):
 
     def to_json(self):
         return {
-            "name": self.name,
+            "page_name": self.page_name,
             "key": self.key.to_json() if self.key is not None else None,
             "kwargs": self._kwargs,
         }
 
     @classmethod
     def from_json(cls, obj):
-        if obj['name'] not in cls._registry:
-            raise ValueError(f"Unknown page: {obj['name']}")
-        page_cls = cls._registry[obj['name']]
+        if obj['page_name'] not in cls._registry:
+            raise ValueError(f"Unknown page: {obj['page_name']}")
+        page_cls = cls._registry[obj['page_name']]
         key = Key.from_json(obj['key']) if obj['key'] is not None else None
         return page_cls(key, **obj['kwargs'])
 
@@ -489,7 +497,7 @@ class Crawler:
         try:
             output = request.page.parse(html, request.metadata)
         except ParsingError as e:
-            # page_name: request.page.name
+            # page_name: request.page.page_name
             # page_key: request.page.key
             # url: request.page.url()
             raise e
@@ -537,5 +545,5 @@ def root_page(keys):
         return wrapper
 
 def register_page(page_cls):
-    Page.register_page(page_cls.name, page_cls)
+    Page.register_page(page_cls.page_name, page_cls)
     return page_cls

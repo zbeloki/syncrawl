@@ -94,7 +94,7 @@ def test_key_serializable():
 # Page
     
 class A(Page):
-    name="a"
+    page_name="a"
     def url(self):
         return f"http://test.com/{self.key.name}"
     def next_update(self, last_update, metadata):
@@ -115,7 +115,7 @@ class B(Page):
         return out
 
 class C(Page):
-    name = "c"
+    page_name = "c"
     def next_update(self, last_update, metadata):
         return last_update + 1
     def parse(self, html, metadata):
@@ -129,10 +129,16 @@ def test_page_basic():
     p = A(k1)
     assert p.key == k2
     p2 = A(k1, x=5, y="abc")
+    assert p2.id == 5
+    assert p2.name == "abc"
     assert p2.x == 5
     assert p2.y == "abc"
     with pytest.raises(AttributeError):
         p2.z
+    with pytest.raises(ValueError):
+        p3 = A(Key(page_name="kk"))
+    with pytest.raises(ValueError):
+        p3 = A(k1, url="com")
 
 def test_page_subclass():
     k1 = Key(id=5, name="abc")
@@ -141,11 +147,11 @@ def test_page_subclass():
     p2 = A(k2)
     p3 = A(k2)
     p4 = A()
-    assert p1.name == "a"
+    assert p1.page_name == "a"
     assert p1.url() == "http://test.com/abc"
     assert p1.next_update(1, {}) == 2
     assert len(p1.parse("html", {})._pages) == 1
-    Page.register_page(p1.name, A)
+    Page.register_page(p1.page_name, A)
     assert Page._registry == {"a": A}
     assert str(p1) == f"<a>{str(p1.key)}"
     assert hash(p1) == hash(f"<a>{str(p1.key)}")
@@ -381,9 +387,9 @@ def test_crawler_root_pages():
         {"id":2, "name":"def"},
     ])
     class F(Page):
-        name="f"
+        page_name="f"
         def url(self):
-            return f"http://test.com/{self.key.name}"
+            return f"http://test.com/{self.name}"
         def next_update(self, last_update, metadata):
             return last_update + 1
         def parse(self, html, metadata):

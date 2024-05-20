@@ -13,12 +13,17 @@ from inspect import isclass
 import logging
 import argparse
 import time
+import sys
 import pdb
 
 # Item: id_ sortzean, kontuan izan id bereko item berri batek aurrekoa ordezkatzen duela.
 # Noizean behin (egunero?): datalog kopiatu, kargatu, reduzitu (item obsoletoak kendu), move
 # Interfaze bat eskeini Item objektuak bakarrik kargatuko dituena, esportazioak egiteko.
 # Datetime-ekin, edozein uneko egoerara itzuli daiteke erraz
+
+class ParsingError(Exception):
+    def __init__(self, msg):
+        self.message = msg
 
 class Utils:
     @classmethod
@@ -472,7 +477,13 @@ class Crawler:
     def process_request(self, request):
         logging.info(f"Processing request {request}")
         html = self._downloader.download(request.page.url())
-        output = request.page.parse(html, request.metadata)
+        try:
+            output = request.page.parse(html, request.metadata)
+        except ParsingError as e:
+            # page_name: request.page.name
+            # page_key: request.page.key
+            # url: request.page.url()
+            raise e
         last_timestamp = request.next_timestamp
         if len(output._items) > 0:
             self._produce_items(output._items, request.page)

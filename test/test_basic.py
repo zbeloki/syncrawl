@@ -128,6 +128,11 @@ def test_page_basic():
     k2 = Key(id=5, name="abc")
     p = A(k1)
     assert p.key == k2
+    p2 = A(k1, x=5, y="abc")
+    assert p2.x == 5
+    assert p2.y == "abc"
+    with pytest.raises(AttributeError):
+        p2.z
 
 def test_page_subclass():
     k1 = Key(id=5, name="abc")
@@ -153,7 +158,7 @@ def test_page_subclass():
     assert str(p4) == f"<a>"
     
 def test_page_serializable():
-    p = A(Key(id=5, name="abc"))
+    p = A(Key(id=5, name="abc"), x=1, y="b")
     p_json = p.to_json()
     p_copy = Page.from_json(p_json)
     assert type(p_copy) == A

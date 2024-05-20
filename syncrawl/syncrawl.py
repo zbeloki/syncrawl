@@ -180,8 +180,10 @@ class Key(JSONSerializable):
 class Page(JSONSerializable):
     _registry = {}
     
-    def __init__(self, key=None):
+    def __init__(self, key=None, **kwargs):
         self._key = key
+        # @: assert all kwargs are scalar?
+        self._kwargs = kwargs
 
     @classmethod
     def register_page(cls, page_name, page_cls):
@@ -190,7 +192,13 @@ class Page(JSONSerializable):
     @property
     def key(self):
         return self._key
-
+    
+    def __getattr__(self, name):
+        if name in self._kwargs:
+            return self._kwargs[name]
+        else:
+            raise AttributeError(f"Page {self.name} have no attribute '{name}'")
+        
     @property
     @abstractmethod
     def name(self):
@@ -201,11 +209,11 @@ class Page(JSONSerializable):
         pass
 
     @abstractmethod
-    def next_update(self, last_update, metadata):
+    def next_update(self, last_update):
         pass
 
     @abstractmethod
-    def parse(self, html, metadata):
+    def parse(self, html):
         pass
 
     def __str__(self):
@@ -224,7 +232,8 @@ class Page(JSONSerializable):
     def to_json(self):
         return {
             "name": self.name,
-            "key": self._key.to_json() if self._key is not None else None,
+            "key": self.key.to_json() if self.key is not None else None,
+            "kwargs": self._kwargs,
         }
 
     @classmethod
@@ -233,7 +242,7 @@ class Page(JSONSerializable):
             raise ValueError(f"Unknown page: {obj['name']}")
         page_cls = cls._registry[obj['name']]
         key = Key.from_json(obj['key']) if obj['key'] is not None else None
-        return page_cls(key)
+        return page_cls(key, **obj['kwargs'])
 
     
 class PageRequest(JSONSerializable):

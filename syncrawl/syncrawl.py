@@ -113,7 +113,8 @@ class Item(JSONSerializable):
             if type(k) != str:
                 raise TypeError("Item attrib keys must be of type str")
             if type(v) not in self.accepted_types:
-                raise TypeError(f"Item attrib values must be one of: {', '.join(self.accepted_types)}")
+                types = [ str(t) for t in self.accepted_types ]
+                raise TypeError(f"Item attrib values must be one of: {', '.join(types)}")
             self._attribs[k] = v
 
     @property
@@ -200,7 +201,8 @@ class Page(JSONSerializable):
             if type(k) != str:
                 raise TypeError("Page kwarg keys must be of type str")
             if type(v) not in self.accepted_types:
-                raise TypeError("Page kwarg values must be one of: {', '.join(self.accepted_types)}")
+                types = [ str(t) for t in self.accepted_types ]
+                raise TypeError("Page kwarg values must be one of: {', '.join(types)}")
         self._key = key
         self._kwargs = kwargs
 

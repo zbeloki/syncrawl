@@ -103,10 +103,18 @@ class JSONSerializable(abc.ABC):
 
     
 class Item(JSONSerializable):
+    accepted_types = [int, float, str, bool, list, dict, tuple]
+    
     def __init__(self, id_, type_, attribs={}):
         self._id = id_
         self._type = type_
-        self._attribs = { k:v for k, v in attribs.items() }
+        self._attribs = {}
+        for k, v in attribs.items():
+            if type(k) != str:
+                raise TypeError("Item attrib keys must be of type str")
+            if type(v) not in self.accepted_types:
+                raise TypeError(f"Item attrib values must be one of: {', '.join(self.accepted_types)}")
+            self._attribs[k] = v
 
     @property
     def id(self):
@@ -178,6 +186,7 @@ class Key(JSONSerializable):
 
     
 class Page(JSONSerializable):
+    accepted_types = [int, float, str, bool, list, tuple, dict]
     _registry = {}
     
     def __init__(self, key=None, **kwargs):
@@ -187,8 +196,12 @@ class Page(JSONSerializable):
                     (attrib_name in kwargs.keys())
             ):
                 raise ValueError("page_name is a reserved attribute name")
+        for k, v in kwargs.items():
+            if type(k) != str:
+                raise TypeError("Page kwarg keys must be of type str")
+            if type(v) not in self.accepted_types:
+                raise TypeError("Page kwarg values must be one of: {', '.join(self.accepted_types)}")
         self._key = key
-        # @: assert all kwargs are scalar?
         self._kwargs = kwargs
 
     @classmethod

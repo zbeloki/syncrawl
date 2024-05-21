@@ -43,6 +43,13 @@ def test_item_basic():
     assert len(set([i1, i2, i3])) == 2
     assert i1 == i2
     assert i1 != i3
+    i3 = Item("car_1", "car", {"wheels": [1, 2], "windows": {"a": 3}})
+    with pytest.raises(TypeError):
+        Item("car_1", "car", {1: "a"})
+    with pytest.raises(TypeError):
+        Item("car_1", "car", {"a": i1})
+    with pytest.raises(TypeError):
+        Item("car_1", "car", {"a": set()})
 
 def test_item_serializable():
     i = Item("car_1_a", "car", {"wheels": 4, "windows": 3})
@@ -139,6 +146,11 @@ def test_page_basic():
         p3 = A(Key(page_name="kk"))
     with pytest.raises(ValueError):
         p3 = A(k1, url="com")
+    with pytest.raises(TypeError):
+        A(k1, a1=set())
+    with pytest.raises(TypeError):
+        A(k1, a=k2)
+    A(k1, a=[1, "b"], b={"A": 1})
 
 def test_page_subclass():
     k1 = Key(id=5, name="abc")

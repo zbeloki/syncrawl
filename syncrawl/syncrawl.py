@@ -1,6 +1,7 @@
 import requests
 from lxml import etree
 
+from types import NoneType
 import hashlib
 import bisect
 from collections import deque
@@ -103,7 +104,7 @@ class JSONSerializable(abc.ABC):
 
     
 class Item(JSONSerializable):
-    accepted_types = [int, float, str, bool, list, dict, tuple]
+    accepted_types = [int, float, str, bool, list, dict, tuple, NoneType]
     
     def __init__(self, id_, type_, attribs={}):
         self._id = id_
@@ -187,7 +188,7 @@ class Key(JSONSerializable):
 
     
 class Page(JSONSerializable):
-    accepted_types = [int, float, str, bool, list, tuple, dict]
+    accepted_types = [int, float, str, bool, list, tuple, dict, NoneType]
     _registry = {}
     
     def __init__(self, key=None, **kwargs):

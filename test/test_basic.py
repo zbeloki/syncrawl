@@ -43,7 +43,7 @@ def test_item_basic():
     assert len(set([i1, i2, i3])) == 2
     assert i1 == i2
     assert i1 != i3
-    i3 = Item("car_1", "car", {"wheels": [1, 2], "windows": {"a": 3}})
+    i3 = Item("car_1", "car", {"wheels": [1, 2], "windows": {"a": 3, "b": None}})
     with pytest.raises(TypeError):
         Item("car_1", "car", {1: "a"})
     with pytest.raises(TypeError):
@@ -150,7 +150,7 @@ def test_page_basic():
         A(k1, a1=set())
     with pytest.raises(TypeError):
         A(k1, a=k2)
-    A(k1, a=[1, "b"], b={"A": 1})
+    A(k1, a=[1, "b"], b={"A": 1}, c=None)
 
 def test_page_subclass():
     k1 = Key(id=5, name="abc")

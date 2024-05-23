@@ -525,10 +525,10 @@ class Crawler:
             new_request = PageRequest(page, last_timestamp, time.time())
             self._add_request(new_request)
 
+        next_timestamp = request.page.next_update(last_timestamp)
         self._end_request(request)
 
         # @: what if the process stops here? request is closed but the next update is not registered yet
-        next_timestamp = request.page.next_update(last_timestamp)
         if next_timestamp is not None:
             new_request = PageRequest(request.page, last_timestamp, next_timestamp)
             self._add_request(new_request)

@@ -141,6 +141,10 @@ def test_page_basic():
     assert p2.name == "abc"
     assert p2.x == 5
     assert p2.y == "abc"
+    assert p2['y'] == "abc"
+    p2['new'] = "z"
+    assert p2.new == "z"
+    assert p2['new'] == "z"
     with pytest.raises(AttributeError):
         p2.z
     with pytest.raises(ValueError):

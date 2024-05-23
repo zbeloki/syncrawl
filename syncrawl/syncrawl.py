@@ -197,15 +197,11 @@ class Page(JSONSerializable):
                     (key is not None and attrib_name in key._values.keys()) or
                     (attrib_name in kwargs.keys())
             ):
-                raise ValueError("page_name is a reserved attribute name")
-        for k, v in kwargs.items():
-            if type(k) != str:
-                raise TypeError("Page kwarg keys must be of type str")
-            if type(v) not in self.accepted_types:
-                types = [ str(t) for t in self.accepted_types ]
-                raise TypeError("Page kwarg values must be one of: {', '.join(types)}")
+                raise ValueError("{attrib_name} is a reserved attribute name")
         self._key = key
-        self._kwargs = kwargs
+        self._attribs = {}
+        for key, value in kwargs.items():
+            self[key] = value
 
     @classmethod
     def register_page(cls, page_name, page_cls):
@@ -214,10 +210,23 @@ class Page(JSONSerializable):
     @property
     def key(self):
         return self._key
+
+    def __setitem__(self, key, value):
+        if type(key) != str:
+            raise TypeError("Page attribute keys must be of type str")
+        if type(value) not in self.accepted_types:
+            types = [ str(t) for t in self.accepted_types ]
+            raise TypeError("Page attribute values must be one of: {', '.join(types)}")
+        self._attribs[key] = value
+
+    def __getitem__(self, key):
+        if key not in self._attribs.keys():
+            raise KeyError(f"Key {key} not found among Page attributes")
+        return self._attribs[key]
     
     def __getattr__(self, name):
-        if name in self._kwargs:
-            return self._kwargs[name]
+        if name in self._attribs:
+            return self._attribs[name]
         elif name in self.key._values:
             return getattr(self.key, name)
         else:
@@ -257,7 +266,7 @@ class Page(JSONSerializable):
         return {
             "page_name": self.page_name,
             "key": self.key.to_json() if self.key is not None else None,
-            "kwargs": self._kwargs,
+            "attributes": self._attribs,
         }
 
     @classmethod
@@ -266,7 +275,7 @@ class Page(JSONSerializable):
             raise ValueError(f"Unknown page: {obj['page_name']}")
         page_cls = cls._registry[obj['page_name']]
         key = Key.from_json(obj['key']) if obj['key'] is not None else None
-        return page_cls(key, **obj['kwargs'])
+        return page_cls(key, **obj['attributes'])
 
     
 class PageRequest(JSONSerializable):

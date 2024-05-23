@@ -9,6 +9,7 @@ from ..syncrawl import (
     Datalog,
     Crawler,
     root_page,
+    register_page,
 )
 
 from tempfile import NamedTemporaryFile, TemporaryDirectory
@@ -99,33 +100,33 @@ def test_key_serializable():
 
 
 # Page
-    
+
 class A(Page):
     page_name="a"
     def url(self):
         return f"http://test.com/{self.key.name}"
-    def next_update(self, last_update, metadata):
+    def next_update(self, last_update):
         return last_update + 1
-    def parse(self, html, metadata):
+    def parse(self, html):
         out = ParsingOutput()
         out.add_page(A(Key(id=4, name="abc")))
         return out
-
+    
 class B(Page):
     def url(self):
         return f"http://test.com/{self.key.name}"
-    def next_update(self, last_update, metadata):
+    def next_update(self, last_update):
         return last_update + 1
-    def parse(self, html, metadata):
+    def parse(self, html):
         out = ParsingOutput()
         out.add_page(Page(k1))
         return out
 
 class C(Page):
     page_name = "c"
-    def next_update(self, last_update, metadata):
+    def next_update(self, last_update):
         return last_update + 1
-    def parse(self, html, metadata):
+    def parse(self, html):
         out = ParsingOutput()
         out.add_page(Page(k1))
         return out
@@ -161,8 +162,8 @@ def test_page_subclass():
     p4 = A()
     assert p1.page_name == "a"
     assert p1.url() == "http://test.com/abc"
-    assert p1.next_update(1, {}) == 2
-    assert len(p1.parse("html", {})._pages) == 1
+    assert p1.next_update(1) == 2
+    assert len(p1.parse("html")._pages) == 1
     Page.register_page(p1.page_name, A)
     assert Page._registry == {"a": A}
     assert str(p1) == f"<a>{str(p1.key)}"
@@ -201,7 +202,6 @@ def test_page_request_basic():
     assert pr.page == p
     assert pr.last_timestamp is None
     assert pr.next_timestamp == 1.2
-    assert pr.metadata == {}
     f_time = time.time
     time.time = lambda: 1.19
     assert pr.ready() is False
@@ -383,7 +383,7 @@ def test_crawler_basic():
         out1.add_item(i2)
         out1.add_item(i3)
         out1.add_page(p4)
-        p3.parse = lambda html, meta: out1
+        p3.parse = lambda html: out1
         time.time = lambda: 15
         assert p3 not in crawler._page_items
         crawler.process_request(pr3)
@@ -398,13 +398,14 @@ def test_crawler_root_pages():
         {"id":1, "name":"abc"},
         {"id":2, "name":"def"},
     ])
+    @register_page
     class F(Page):
         page_name="f"
         def url(self):
             return f"http://test.com/{self.name}"
-        def next_update(self, last_update, metadata):
+        def next_update(self, last_update):
             return last_update + 1
-        def parse(self, html, metadata):
+        def parse(self, html):
             out = ParsingOutput()
             out.add_page(A(Key(id=4, name="abc")))
             return out

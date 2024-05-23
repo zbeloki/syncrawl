@@ -270,13 +270,12 @@ class Page(JSONSerializable):
 
     
 class PageRequest(JSONSerializable):
-    def __init__(self, page, last_timestamp, next_timestamp, metadata={}):
+    def __init__(self, page, last_timestamp, next_timestamp):
         if next_timestamp is None or (last_timestamp is not None and next_timestamp <= last_timestamp):
             raise ValueError("next_timestamp must contain a value greater than last_timestamp")
         self._page = page
         self._last_timestamp = last_timestamp
         self._next_timestamp = next_timestamp
-        self._metadata = metadata
 
     @property
     def page(self):
@@ -289,10 +288,6 @@ class PageRequest(JSONSerializable):
     @property
     def next_timestamp(self):
         return self._next_timestamp
-
-    @property
-    def metadata(self):
-        return self._metadata
 
     def ready(self):
         return time.time() >= self.next_timestamp
@@ -315,16 +310,14 @@ class PageRequest(JSONSerializable):
             "page": self.page.to_json(),
             "last_timestamp": self.last_timestamp,
             "next_timestamp": self.next_timestamp,
-            "metadata": "NOT_IMPLEMENTED",
         }
 
     @classmethod
     def from_json(cls, obj):
         page = Page.from_json(obj["page"])
-        metadata = None
         last_timestamp = obj["last_timestamp"]
         next_timestamp = obj["next_timestamp"]
-        return cls(page, last_timestamp, next_timestamp, metadata)
+        return cls(page, last_timestamp, next_timestamp)
 
 
 class RequestQueue:
@@ -423,7 +416,6 @@ class ParsingOutput:
     def __init__(self):
         self._items = []
         self._pages = []
-        self.metadata = {}
 
     @property
     def items(self):
@@ -511,7 +503,7 @@ class Crawler:
         logging.info(f"Processing request {request}")
         html = self._downloader.download(request.page.url())
         try:
-            output = request.page.parse(html, request.metadata)
+            output = request.page.parse(html)
         except ParsingError as e:
             # page_name: request.page.page_name
             # page_key: request.page.key
@@ -521,14 +513,15 @@ class Crawler:
         if len(output._items) > 0:
             self._produce_items(output._items, request.page)
         for page in output._pages:
-            new_request = PageRequest(page, last_timestamp, time.time(), output.metadata)
+            new_request = PageRequest(page, last_timestamp, time.time())
             self._add_request(new_request)
 
         self._end_request(request)
 
-        next_timestamp = request.page.next_update(last_timestamp, output.metadata)
+        # @: what if the process stops here? request is closed but the next update is not registered yet
+        next_timestamp = request.page.next_update(last_timestamp)
         if next_timestamp is not None:
-            new_request = PageRequest(request.page, last_timestamp, next_timestamp, request.metadata)
+            new_request = PageRequest(request.page, last_timestamp, next_timestamp)
             self._add_request(new_request)
         else:
             self._forget_page(request.page)
@@ -538,7 +531,7 @@ class Crawler:
         self._load_state()
         
         for page in self._root_pages:
-            self._add_request(PageRequest(page, None, time.time(), {}))
+            self._add_request(PageRequest(page, None, time.time()))
         
         while True:
             request = self._request_queue.get_next_request()

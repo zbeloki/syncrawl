@@ -14,7 +14,7 @@ from ..syncrawl import (
 
 from tempfile import NamedTemporaryFile, TemporaryDirectory
 from collections import deque
-from datetime import datetime
+from datetime import datetime, timedelta
 import pytest
 import time
 import pdb
@@ -106,7 +106,7 @@ class A(Page):
     def url(self):
         return f"http://test.com/{self['name']}"
     def next_update(self, last_update):
-        return last_update + 1
+        return last_update + timedelta(seconds=1)
     def parse(self, html):
         out = ParsingOutput()
         out.add_page(A(Key(id=4, name="abc")))
@@ -116,7 +116,7 @@ class B(Page):
     def url(self):
         return f"http://test.com/{self['name']}"
     def next_update(self, last_update):
-        return last_update + 1
+        return last_update + timedelta(seconds=1)
     def parse(self, html):
         out = ParsingOutput()
         out.add_page(Page(k1))
@@ -125,7 +125,7 @@ class B(Page):
 class C(Page):
     page_name = "c"
     def next_update(self, last_update):
-        return last_update + 1
+        return last_update + timedelta(seconds=1)
     def parse(self, html):
         out = ParsingOutput()
         out.add_page(Page(k1))
@@ -159,7 +159,7 @@ def test_page_subclass():
     p4 = A()
     assert p1.page_name == "a"
     assert p1.url() == "http://test.com/abc"
-    assert p1.next_update(1) == 2
+    assert p1.next_update(datetime.fromtimestamp(1)) == datetime.fromtimestamp(2)
     assert len(p1.parse("html")._pages) == 1
     Page.register_page(p1.page_name, A)
     assert Page._registry == {"a": A}
@@ -401,7 +401,7 @@ def test_crawler_root_pages():
         def url(self):
             return f"http://test.com/{self.name}"
         def next_update(self, last_update):
-            return last_update + 1
+            return last_update + timedelta(seconds=1)
         def parse(self, html):
             out = ParsingOutput()
             out.add_page(A(Key(id=4, name="abc")))

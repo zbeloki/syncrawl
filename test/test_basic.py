@@ -104,7 +104,7 @@ def test_key_serializable():
 class A(Page):
     page_name="a"
     def url(self):
-        return f"http://test.com/{self.key.name}"
+        return f"http://test.com/{self['name']}"
     def next_update(self, last_update):
         return last_update + 1
     def parse(self, html):
@@ -114,7 +114,7 @@ class A(Page):
     
 class B(Page):
     def url(self):
-        return f"http://test.com/{self.key.name}"
+        return f"http://test.com/{self['name']}"
     def next_update(self, last_update):
         return last_update + 1
     def parse(self, html):
@@ -137,20 +137,13 @@ def test_page_basic():
     p = A(k1)
     assert p.key == k2
     p2 = A(k1, x=5, y="abc")
-    assert p2.id == 5
-    assert p2.name == "abc"
-    assert p2.x == 5
-    assert p2.y == "abc"
+    assert p2['id'] == 5
+    assert p2['name'] == "abc"
+    assert p2['x'] == 5
     assert p2['y'] == "abc"
-    p2['new'] = "z"
-    assert p2.new == "z"
-    assert p2['new'] == "z"
+    assert p2['y'] == "abc"
     with pytest.raises(AttributeError):
-        p2.z
-    with pytest.raises(ValueError):
-        p3 = A(Key(page_name="kk"))
-    with pytest.raises(ValueError):
-        p3 = A(k1, url="com")
+        p2['z']
     with pytest.raises(TypeError):
         A(k1, a1=set())
     with pytest.raises(TypeError):

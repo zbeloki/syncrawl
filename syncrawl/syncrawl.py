@@ -192,12 +192,6 @@ class Page(JSONSerializable):
     _registry = {}
     
     def __init__(self, key=None, **kwargs):
-        for attrib_name in [ "page_name", "url", "next_update", "parse", "to_json", "from_json" ]:
-            if (
-                    (key is not None and attrib_name in key._values.keys()) or
-                    (attrib_name in kwargs.keys())
-            ):
-                raise ValueError("{attrib_name} is a reserved attribute name")
         self._key = key
         self._attribs = {}
         for key, value in kwargs.items():
@@ -221,17 +215,12 @@ class Page(JSONSerializable):
 
     def __getitem__(self, key):
         if key not in self._attribs.keys():
-            raise KeyError(f"Key {key} not found among Page attributes")
+            if key not in self._key._values:
+                raise AttributeError(f"Key {key} not found among Page attributes")
+            else:
+                return self._key._values[key]
         return self._attribs[key]
-    
-    def __getattr__(self, name):
-        if name in self._attribs:
-            return self._attribs[name]
-        elif name in self.key._values:
-            return getattr(self.key, name)
-        else:
-            raise AttributeError(f"Page {self.name} have no attribute '{name}'")
-        
+            
     @property
     @abstractmethod
     def page_name(self):

@@ -210,7 +210,7 @@ class Page(JSONSerializable):
             raise TypeError("Page attribute keys must be of type str")
         if type(value) not in self.accepted_types:
             types = [ str(t) for t in self.accepted_types ]
-            raise TypeError("Page attribute values must be one of: {', '.join(types)}")
+            raise TypeError(f"Page attribute values must be one of: {', '.join(types)}")
         self._attribs[key] = value
 
     def __getitem__(self, key):
@@ -515,12 +515,14 @@ class Crawler:
             self._add_request(new_request)
 
         last_dt = datetime.fromtimestamp(last_timestamp)
-        next_timestamp = request.page.next_update(last_dt).timestamp()
+        next_dt = request.page.next_update(last_dt)
+        if next_dt is not None:
+            next_dt = next_dt.timestamp()
         self._end_request(request)
 
         # @: what if the process stops here? request is closed but the next update is not registered yet
-        if next_timestamp is not None:
-            new_request = PageRequest(request.page, last_timestamp, next_timestamp)
+        if next_dt is not None:
+            new_request = PageRequest(request.page, last_timestamp, next_dt)
             self._add_request(new_request)
         else:
             self._forget_page(request.page)

@@ -1,5 +1,6 @@
 import requests
 from lxml import etree
+from pymongo import MongoClient
 
 from types import NoneType
 import hashlib
@@ -9,8 +10,9 @@ import abc
 from abc import abstractmethod
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from inspect import isclass
+import traceback
 import logging
 import argparse
 import time
@@ -140,7 +142,6 @@ class Item(JSONSerializable):
 
     def to_json(self):
         obj = {
-            "_id": self._id,
             "_type": self._type,
         }
         for key, value in self._attribs.items():
@@ -268,12 +269,17 @@ class Page(JSONSerializable):
 
     
 class PageRequest(JSONSerializable):
-    def __init__(self, page, last_timestamp, next_timestamp):
+    def __init__(self, page, last_timestamp, next_timestamp, id_=None):
         if next_timestamp is None or (last_timestamp is not None and next_timestamp <= last_timestamp):
             raise ValueError("next_timestamp must contain a value greater than last_timestamp")
         self._page = page
         self._last_timestamp = last_timestamp
         self._next_timestamp = next_timestamp
+        self._id = id_
+
+    @property
+    def id(self):
+        return self._id
 
     @property
     def page(self):
@@ -287,21 +293,9 @@ class PageRequest(JSONSerializable):
     def next_timestamp(self):
         return self._next_timestamp
 
-    def ready(self):
-        return time.time() >= self.next_timestamp
-
     def __str__(self):
         date = datetime.fromtimestamp(self.next_timestamp)
-        return f"{str(self.page)}(PT:{date.strftime('%Y-%m-%d_%H:%M:%S')})"
-
-    def __hash__(self):
-        return hash(self.page)
-
-    def __eq__(self, other):
-        return hash(self) == hash(other)
-
-    def __ne__(self, other):
-        return not(self==other)
+        return f"{str(self.page)}(Update:{date.strftime('%Y-%m-%d_%H:%M:%S')})"
 
     def to_json(self):
         return {
@@ -311,42 +305,175 @@ class PageRequest(JSONSerializable):
         }
 
     @classmethod
-    def from_json(cls, obj):
+    def from_json(cls, obj, id_):
         page = Page.from_json(obj["page"])
         last_timestamp = obj["last_timestamp"]
         next_timestamp = obj["next_timestamp"]
-        return cls(page, last_timestamp, next_timestamp)
+        return cls(page, last_timestamp, next_timestamp, id_=id_)
 
+
+class ItemStore:
+    def __init__(self, db):
+        self._is = db.item_store
+        self._create_indices()
+
+    def _create_indices(self):
+        # @: create all indices
+        pass
+
+    def add_items(self, items, page):
+        self._is.delete_many({
+            "page.page_name": page.to_json()["page_name"],
+            "page.key": page.to_json()["key"],
+        })
+        item_jsons = [ {
+            "item": item.to_json(),
+            "page": {
+                "page_name": page.to_json()["page_name"],
+                "key": page.to_json()["key"],
+            },
+        } for item in items ]
+        self._is.insert_many(item_jsons)
 
 class RequestQueue:
-    def __init__(self):
-        self._request_queue = deque()
-        self._queued_pages = set()
+    def __init__(self, db):
+        self._rq = db.request_queue
+        self._ap = db.archived_pages
+        self._create_indices()
 
-    def add_request(self, request):
-        if request.page not in self._queued_pages:
-            bisect.insort(self._request_queue, request, key=lambda req: req.next_timestamp)
-            self._queued_pages.add(request.page)
+    def _create_indices(self):
+        # @: create all indices
+        self._rq.create_index("payload.next_timestamp")
+        self._rq.create_index(["payload.page.page_name", "payload.page.key"])
+        self._ap.create_index(["payload.page_name", "payload.key"])
+        
+    def add_request(self, request, force=False):
+        if force or self._rq.count_documents({
+                "status": {"$in": ["pending", "processing", "failed"]},
+                "payload.page.page_name": request.page.to_json()["page_name"],
+                "payload.page.key": request.page.to_json()["key"],
+        }, limit=1) == 0:
+            self._rq.insert_one({
+                "payload": request.to_json(),
+                "status": "pending",
+                "created_at": datetime.now(),
+                "status_updated_at": datetime.now(),
+                "processing_started_at": None,
+                "retries": 0,
+            })
             return True
         return False
+    
+    def end_request(self, request):
+        # @: max_retries configurable
+        max_retries = 2
+        self._rq.update_one(
+            {
+                "_id": request.id,
+                "status": "processing",
+                "payload.page.page_name": request.page.to_json()["page_name"],
+                "payload.page.key": request.page.to_json()["key"],
+            },
+            {
+                "$set": {
+                    "status": "completed",
+                    "status_updated_at": datetime.now(),
+                },
+            },
+        )
 
-    def remove_request(self, request):
-        idx = self._request_queue.index(request)
-        del self._request_queue[idx]
-        self._queued_pages.remove(request.page)
+    def fail_request(self, request, error_msg, traceback_msg, force=False):
+        # @: use id to select the request in the DB
+        self._rq.update_one(
+            {
+                "_id": request.id,
+                "status": "processing",
+                "payload.page.page_name": request.page.to_json()["page_name"],
+                "payload.page.key": request.page.to_json()["key"],
+            },
+            {
+                "$set": {
+                    "status": ("failed" if force else "pending"),
+                    "status_updated_at": datetime.now(),
+                    "error_msg": error_msg,
+                    "error_traceback": traceback_msg,
+                },
+                "$inc": {"retries": 1},
+            },
+        )
 
+    def archive_page(self, page):
+        self._ap.insert_one({
+            "page_name": page.to_json()["page_name"],
+            "key": page.to_json()["key"],
+        })
+
+    def is_page_archived(self, page):
+        return self._ap.count_documents({
+                "payload.page_name": page.to_json()["page_name"],
+                "payload.key": page.to_json()["key"],
+        }, limit=1) == 1
+
+    def _check_stale_requests(self):
+        # @: max_processing_time configurable
+        # @: any request started processing before max_processing_time must be forced to fail
+        max_processing_time = 10
+        threshold_ts = datetime.now() - timedelta(seconds=max_processing_time)
+        self._rq.update_many(
+            {
+                "status": "processing",
+                "processing_started_at": {"$lte": threshold_ts }
+            },
+            {
+                "$set": {
+                    "status": "pending",
+                    "status_updated_at": datetime.now(),
+                    "processing_started_at": None,
+                },
+                "$inc": {
+                    "retries": 1,
+                },
+            },
+        )
+
+    def _check_failed_requests(self):
+        # @: max_retries configurable
+        max_retries = 2
+        self._rq.update_many(
+            {
+                "status": "pending",
+                "retries": {"$gte": max_retries+1},
+            },
+            {
+                "$set": {
+                    "status": "failed",
+                    "status_updated_at": datetime.now(),
+                },
+            },
+        )
+        
     def get_next_request(self):
-        request = None
-        if len(self._request_queue) == 0:
-            return None
-        while request is None:
-            next_request = self._request_queue[0]
-            if next_request.ready():
-                request = self._request_queue[0]
+        while True:
+            self._check_stale_requests()
+            self._check_failed_requests()
+            request_json = self._rq.find_one_and_update(
+                {
+                    "status": "pending",
+                    "payload.next_timestamp": {"$lte": datetime.now().timestamp()},
+                },
+                {
+                    "$set": {
+                        "status": "processing",
+                        "status_updated_at": datetime.now(),
+                    },
+                },
+                sort=[("payload.next_timestamp", 1)]
+            )
+            if request_json is None:
+                # @: sleep time configurable
+                time.sleep(1)                
             else:
-                time.sleep(1)
-        return request
-
+                return PageRequest.from_json(request_json["payload"], id_=request_json["_id"])
     
 class Datalog:
     datetime_format = "%m-%d-%Y %H:%M:%S.%f"
@@ -430,15 +557,54 @@ class ParsingOutput:
         self._pages.append(page)
 
     
+# class DatabaseManager:
+#     def __init__(self, db_name):
+#         # @: MongoDB config
+#         self._client = MongoClient()
+#         self._db = self._client[db_name]
+#         self.request_queue = self._db.request_queue
+#         # @: change next_timestamp -> next_datetime
+#         self.request_queue.create_index("next_timestamp")
+#         self.request_queue.create_index(["page.page_name", "page.key"])
+
+#     def add_request(self, request):
+#         if self.request_queue.count_documents({
+#                 "page.page_name": request.page.to_json()["page_name"],
+#                 "page.key": request.page.to_json()["key"],
+#         }, limit=1) == 0:
+#             self.request_queue.insert_one(request.to_json())
+#             return True
+#         return False
+
+#     def remove_request(self, request):
+#         self.request_queue.delete_one({
+#             "page.page_name": request.page.to_json()["page_name"],
+#             "page.key": request.page.to_json()["key"],
+#         })
+
+#     def get_next_request(self):
+#         while True:
+#             cursor = self.request_queue.find().sort({"next_timestamp": 1}).limit(1)
+#             request_json = next(cursor, None)
+#             if request_json is None:
+#                 return None
+#             if time.time() >= request_json["next_timestamp"]:
+#                 return PageRequest.from_json(request_json)
+#             else:
+#                 time.sleep(1)
+
 class Crawler:
     _root_pages = []
     
-    def __init__(self, datalog_fpath, cache_path=None, request_delay=0):
+    def __init__(self, db_name, datalog_fpath, cache_path=None, request_delay=0):
+        self._client = MongoClient()
+        self._db = self._client[db_name]
         self._downloader = HTTPDownloader(cache_path, request_delay)
         self._datalog = Datalog(datalog_fpath)
-        self._request_queue = RequestQueue()
+        self._request_queue = RequestQueue(self._db)
+        self._item_store = ItemStore(self._db)
         self._page_items = {}
-        self._forgotten_pages = set()
+        #self._db = DatabaseManager(db_name)
         
     def _load_state(self):
         for msg in self._datalog.read():
@@ -446,10 +612,6 @@ class Crawler:
                 self._add_item(msg['item'], msg['page'], log=False)
             elif msg['event'] == "DEL_ITEM": # item, page
                 self._delete_item(msg['item_id'], msg['page'], log=False)
-            elif msg['event'] == "ADD_REQUEST": # request
-                self._add_request(msg['request'], log=False)
-            elif msg['event'] == "END_REQUEST": # request
-                self._end_request(msg["request"], log=False)
             elif msg['event'] == "FORGET_PAGE": # page
                 self._forget_page(msg["page"], log=False)
 
@@ -468,65 +630,75 @@ class Crawler:
             if len(self._page_items[page]) == 0:
                 del self._page_items[page]
 
-    def _add_request(self, request, log=True):
-        if request.page not in self._forgotten_pages:
-            added = self._request_queue.add_request(request)
-            if log and added:
-                self._datalog.write_add_request(request)
+    def _add_request(self, request, force=False, log=True):
+        if force or not self._request_queue.is_page_archived(request.page):
+            added = self._request_queue.add_request(request, force)
+            if added:
                 logging.info(f"New request {request} added")
 
     def _end_request(self, request, log=True):
-        if log:
-            self._datalog.write_end_request(request)
-        self._request_queue.remove_request(request)
+        self._request_queue.end_request(request)
+
+    def _fail_request(self, request, msg, traceback_msg, force=False):
+        self._request_queue.fail_request(request, msg, traceback_msg, force)
         
     def _forget_page(self, page, log=True):
-        if log:
-            self._datalog.write_forget_page(page)
-        self._forgotten_pages.add(page)
+        self._request_queue.archive_page(page)
 
     def _produce_items(self, items, page):
-        item_ids = set([ item._id for item in items ])
-        if page not in self._page_items:
-            self._page_items[page] = set()
-        for prev_item_id in set(self._page_items[page]):
-            if prev_item_id not in item_ids:
-                logging.info(f"Item {prev_item_id} deleted from page {page}")
-                self._delete_item(prev_item_id, page)
+        self._item_store.add_items(items, page)
+        # item_ids = set([ item._id for item in items ])
+        # if page not in self._page_items:
+        #     self._page_items[page] = set()
+        # for prev_item_id in set(self._page_items[page]):
+        #     if prev_item_id not in item_ids:
+        #         logging.info(f"Item {prev_item_id} deleted from page {page}")
+        #         self._delete_item(prev_item_id, page)
+        # for item in items:
+        #     self._add_item(item, page)
         for item in items:
-            self._add_item(item, page)
             logging.info(f"Item {item} created from page {page}")
 
     def process_request(self, request):
         logging.info(f"Processing request {request}")
-        html = self._downloader.download(request.page.url())
         try:
+            html = self._downloader.download(request.page.url())
             output = request.page.parse(html)
+            last_timestamp = request.next_timestamp
+            if len(output._items) > 0:
+                self._produce_items(output._items, request.page)
+            for page in output._pages:
+                new_request = PageRequest(page, last_timestamp, time.time())
+                self._add_request(new_request)
+
+            last_dt = datetime.fromtimestamp(last_timestamp)
+            next_dt = request.page.next_update(last_dt)
+            if next_dt is not None:
+                next_dt = next_dt.timestamp()
+                new_request = PageRequest(request.page, last_timestamp, next_dt)
+                self._add_request(new_request, force=True)
+            else:
+                self._request_queue.archive_page(request.page)
+                logging.info(f"Page {request.page} added to archived list")
+
+            self._end_request(request)
         except ParsingError as e:
-            # page_name: request.page.page_name
-            # page_key: request.page.key
-            # url: request.page.url()
-            raise e
-        last_timestamp = request.next_timestamp
-        if len(output._items) > 0:
-            self._produce_items(output._items, request.page)
-        for page in output._pages:
-            new_request = PageRequest(page, last_timestamp, time.time())
-            self._add_request(new_request)
+            self._fail_request(request, e.message, traceback.format_exc(), force=True)
+        except Exception as e:
+            self._fail_request(request, e.message, traceback.format_exc())
 
-        last_dt = datetime.fromtimestamp(last_timestamp)
-        next_dt = request.page.next_update(last_dt)
-        if next_dt is not None:
-            next_dt = next_dt.timestamp()
-        self._end_request(request)
+        # last_dt = datetime.fromtimestamp(last_timestamp)
+        # next_dt = request.page.next_update(last_dt)
+        # if next_dt is not None:
+        #     next_dt = next_dt.timestamp()
 
-        # @: what if the process stops here? request is closed but the next update is not registered yet
-        if next_dt is not None:
-            new_request = PageRequest(request.page, last_timestamp, next_dt)
-            self._add_request(new_request)
-        else:
-            self._forget_page(request.page)
-            logging.info(f"Page {request.page} added to forget list")
+        # # @: what if the process stops here? request is closed but the next update is not registered yet
+        # if next_dt is not None:
+        #     new_request = PageRequest(request.page, last_timestamp, next_dt)
+        #     self._add_request(new_request, force=True)
+        # else:
+        #     self._forget_page(request.page)
+        #     logging.info(f"Page {request.page} added to forget list")
     
     def sync(self):
         self._load_state()
@@ -536,8 +708,6 @@ class Crawler:
         
         while True:
             request = self._request_queue.get_next_request()
-            if request is None:
-                return
             self.process_request(request)
 
 

@@ -19,8 +19,6 @@ import time
 import sys
 import pdb
 
-# Item: id_ sortzean, kontuan izan id bereko item berri batek aurrekoa ordezkatzen duela.
-# Noizean behin (egunero?): datalog kopiatu, kargatu, reduzitu (item obsoletoak kendu), move
 # Interfaze bat eskeini Item objektuak bakarrik kargatuko dituena, esportazioak egiteko.
 # Datetime-ekin, edozein uneko egoerara itzuli daiteke erraz
 
@@ -130,15 +128,6 @@ class Item(JSONSerializable):
         
     def __str__(self):
         return "[" + self._id + "]" + f"<{self._type}>{{" + ','.join([ f"{k}:{self._attribs[k]}" for k in sorted(self._attribs.keys()) ]) + "}"
-    
-    def __hash__(self):
-        return hash(self._id)
-    
-    def __eq__(self, other):
-        return hash(self) == hash(other)
-    
-    def __ne__(self, other):
-        return not(self == other)
 
     def to_json(self):
         obj = {
@@ -170,15 +159,6 @@ class Key(JSONSerializable):
 
     def __str__(self):
         return "(" + ','.join([ f"{k}={self._values[k]}" for k in sorted(self._values.keys()) ]) + ")"
-    
-    def __hash__(self):
-        return hash(str(self))
-    
-    def __eq__(self, other):
-        return str(self) == str(other)
-    
-    def __ne__(self, other):
-        return not(self == other)
 
     def to_json(self):
         return self._values
@@ -232,7 +212,7 @@ class Page(JSONSerializable):
         pass
 
     @abstractmethod
-    def next_update(self, last_update):
+    def next_update_at(self, last_updated_at):
         pass
 
     @abstractmethod
@@ -242,15 +222,6 @@ class Page(JSONSerializable):
     def __str__(self):
         key_str = str(self._key) if self._key is not None else ""
         return "<" + self.page_name + ">" + key_str
-    
-    def __hash__(self):
-        return hash(str(self))
-    
-    def __eq__(self, other):
-        return str(self) == str(other)
-    
-    def __ne__(self, other):
-        return not(self == other)
 
     def to_json(self):
         return {
@@ -269,12 +240,12 @@ class Page(JSONSerializable):
 
     
 class PageRequest(JSONSerializable):
-    def __init__(self, page, last_timestamp, next_timestamp, id_=None):
-        if next_timestamp is None or (last_timestamp is not None and next_timestamp <= last_timestamp):
-            raise ValueError("next_timestamp must contain a value greater than last_timestamp")
+    def __init__(self, page, last_updated_at, next_update_at, id_=None):
+        if next_update_at is None or (last_updated_at is not None and next_update_at <= last_updated_at):
+            raise ValueError("next_update_at must contain a value greater than last_updated_at")
         self._page = page
-        self._last_timestamp = last_timestamp
-        self._next_timestamp = next_timestamp
+        self._last_updated_at = last_updated_at
+        self._next_update_at = next_update_at
         self._id = id_
 
     @property
@@ -286,30 +257,29 @@ class PageRequest(JSONSerializable):
         return self._page
 
     @property
-    def last_timestamp(self):
-        return self._last_timestamp
+    def last_updated_at(self):
+        return self._last_updated_at
 
     @property
-    def next_timestamp(self):
-        return self._next_timestamp
+    def next_update_at(self):
+        return self._next_update_at
 
     def __str__(self):
-        date = datetime.fromtimestamp(self.next_timestamp)
-        return f"{str(self.page)}(Update:{date.strftime('%Y-%m-%d_%H:%M:%S')})"
+        return f"{str(self.page)}(Update:{self._next_update_at.strftime('%Y-%m-%d_%H:%M:%S')})"
 
     def to_json(self):
         return {
             "page": self.page.to_json(),
-            "last_timestamp": self.last_timestamp,
-            "next_timestamp": self.next_timestamp,
+            "last_updated_at": self.last_updated_at,
+            "next_update_at": self.next_update_at,
         }
 
     @classmethod
     def from_json(cls, obj, id_):
         page = Page.from_json(obj["page"])
-        last_timestamp = obj["last_timestamp"]
-        next_timestamp = obj["next_timestamp"]
-        return cls(page, last_timestamp, next_timestamp, id_=id_)
+        last_updated_at = obj["last_updated_at"]
+        next_update_at = obj["next_update_at"]
+        return cls(page, last_updated_at, next_update_at, id_=id_)
 
 
 class ItemStore:
@@ -321,7 +291,7 @@ class ItemStore:
         # @: create all indices
         pass
 
-    def add_items(self, items, page):
+    def set_items(self, items, page):
         self._is.delete_many({
             "page.page_name": page.to_json()["page_name"],
             "page.key": page.to_json()["key"],
@@ -343,7 +313,7 @@ class RequestQueue:
 
     def _create_indices(self):
         # @: create all indices
-        self._rq.create_index("payload.next_timestamp")
+        self._rq.create_index("payload.next_update_at")
         self._rq.create_index(["payload.page.page_name", "payload.page.key"])
         self._ap.create_index(["payload.page_name", "payload.key"])
         
@@ -378,6 +348,7 @@ class RequestQueue:
                 "$set": {
                     "status": "completed",
                     "status_updated_at": datetime.now(),
+                    "payload.next_update_at": None,
                 },
             },
         )
@@ -418,11 +389,11 @@ class RequestQueue:
         # @: max_processing_time configurable
         # @: any request started processing before max_processing_time must be forced to fail
         max_processing_time = 10
-        threshold_ts = datetime.now() - timedelta(seconds=max_processing_time)
+        threshold_dt = datetime.now() - timedelta(seconds=max_processing_time)
         self._rq.update_many(
             {
                 "status": "processing",
-                "processing_started_at": {"$lte": threshold_ts }
+                "processing_started_at": {"$lte": threshold_dt }
             },
             {
                 "$set": {
@@ -459,7 +430,7 @@ class RequestQueue:
             request_json = self._rq.find_one_and_update(
                 {
                     "status": "pending",
-                    "payload.next_timestamp": {"$lte": datetime.now().timestamp()},
+                    "payload.next_update_at": {"$lte": datetime.now()},
                 },
                 {
                     "$set": {
@@ -467,7 +438,7 @@ class RequestQueue:
                         "status_updated_at": datetime.now(),
                     },
                 },
-                sort=[("payload.next_timestamp", 1)]
+                sort=[("payload.next_update_at", 1)]
             )
             if request_json is None:
                 # @: sleep time configurable
@@ -475,67 +446,6 @@ class RequestQueue:
             else:
                 return PageRequest.from_json(request_json["payload"], id_=request_json["_id"])
     
-class Datalog:
-    datetime_format = "%m-%d-%Y %H:%M:%S.%f"
-    
-    def __init__(self, fpath):
-        self._fpath = fpath
-
-    def _write(self, msg):
-        msg["datetime"] = datetime.now().strftime(self.datetime_format)
-        with open(self._fpath, 'a') as f:
-            print(json.dumps(msg), file=f)
-
-    def read(self):
-        msgs = []
-        if os.path.isfile(self._fpath):
-            with open(self._fpath, 'r') as f:
-                for ln in f:
-                    msg = json.loads(ln)
-                    for key, value in msg.items():
-                        if key == "page":
-                            msg[key] = Page.from_json(value)
-                        elif key == "item":
-                            msg[key] = Item.from_json(value)
-                        elif key == "request":
-                            msg[key] = PageRequest.from_json(value)
-                    if "datetime" in msg:
-                        msg["datetime"] = datetime.strptime(msg["datetime"], self.datetime_format)
-                    msgs.append(msg)
-        return msgs
-
-    def write_add_item(self, item, page):
-        self._write({
-            "event": "ADD_ITEM",
-            "page": page.to_json(),
-            "item": item.to_json(),
-        })
-
-    def write_delete_item(self, item_id, page):
-        self._write({
-            "event": "DEL_ITEM",
-            "page": page.to_json(),
-            "item_id": item_id,
-        })
-
-    def write_add_request(self, request):
-        self._write({
-            "event": "ADD_REQUEST",
-            "request": request.to_json(),
-        })
-
-    def write_end_request(self, request):
-        self._write({
-            "event": "END_REQUEST",
-            "request": request.to_json(),
-        })
-
-    def write_forget_page(self, page):
-        self._write({
-            "event": "FORGET_PAGE",
-            "page": page.to_json(),
-        })
-
 
 class ParsingOutput:
     def __init__(self):
@@ -556,42 +466,6 @@ class ParsingOutput:
     def add_page(self, page):
         self._pages.append(page)
 
-    
-# class DatabaseManager:
-#     def __init__(self, db_name):
-#         # @: MongoDB config
-#         self._client = MongoClient()
-#         self._db = self._client[db_name]
-#         self.request_queue = self._db.request_queue
-#         # @: change next_timestamp -> next_datetime
-#         self.request_queue.create_index("next_timestamp")
-#         self.request_queue.create_index(["page.page_name", "page.key"])
-
-#     def add_request(self, request):
-#         if self.request_queue.count_documents({
-#                 "page.page_name": request.page.to_json()["page_name"],
-#                 "page.key": request.page.to_json()["key"],
-#         }, limit=1) == 0:
-#             self.request_queue.insert_one(request.to_json())
-#             return True
-#         return False
-
-#     def remove_request(self, request):
-#         self.request_queue.delete_one({
-#             "page.page_name": request.page.to_json()["page_name"],
-#             "page.key": request.page.to_json()["key"],
-#         })
-
-#     def get_next_request(self):
-#         while True:
-#             cursor = self.request_queue.find().sort({"next_timestamp": 1}).limit(1)
-#             request_json = next(cursor, None)
-#             if request_json is None:
-#                 return None
-#             if time.time() >= request_json["next_timestamp"]:
-#                 return PageRequest.from_json(request_json)
-#             else:
-#                 time.sleep(1)
 
 class Crawler:
     _root_pages = []
@@ -600,111 +474,46 @@ class Crawler:
         self._client = MongoClient()
         self._db = self._client[db_name]
         self._downloader = HTTPDownloader(cache_path, request_delay)
-        self._datalog = Datalog(datalog_fpath)
         self._request_queue = RequestQueue(self._db)
         self._item_store = ItemStore(self._db)
-        self._page_items = {}
-        #self._db = DatabaseManager(db_name)
-        
-    def _load_state(self):
-        for msg in self._datalog.read():
-            if msg['event'] == "ADD_ITEM": # item, page
-                self._add_item(msg['item'], msg['page'], log=False)
-            elif msg['event'] == "DEL_ITEM": # item, page
-                self._delete_item(msg['item_id'], msg['page'], log=False)
-            elif msg['event'] == "FORGET_PAGE": # page
-                self._forget_page(msg["page"], log=False)
 
-    def _add_item(self, item, page, log=True):
-        if log:
-            self._datalog.write_add_item(item, page)
-        if page not in self._page_items:
-            self._page_items[page] = set()
-        self._page_items[page].add(item._id)
-
-    def _delete_item(self, item_id, page, log=True):
-        if log:
-            self._datalog.write_delete_item(item_id, page)
-        if page in self._page_items and item_id in self._page_items[page]:
-            self._page_items[page].remove(item_id)
-            if len(self._page_items[page]) == 0:
-                del self._page_items[page]
-
-    def _add_request(self, request, force=False, log=True):
+    def _add_request(self, request, force=False):
         if force or not self._request_queue.is_page_archived(request.page):
             added = self._request_queue.add_request(request, force)
             if added:
                 logging.info(f"New request {request} added")
-
-    def _end_request(self, request, log=True):
-        self._request_queue.end_request(request)
-
-    def _fail_request(self, request, msg, traceback_msg, force=False):
-        self._request_queue.fail_request(request, msg, traceback_msg, force)
-        
-    def _forget_page(self, page, log=True):
-        self._request_queue.archive_page(page)
-
-    def _produce_items(self, items, page):
-        self._item_store.add_items(items, page)
-        # item_ids = set([ item._id for item in items ])
-        # if page not in self._page_items:
-        #     self._page_items[page] = set()
-        # for prev_item_id in set(self._page_items[page]):
-        #     if prev_item_id not in item_ids:
-        #         logging.info(f"Item {prev_item_id} deleted from page {page}")
-        #         self._delete_item(prev_item_id, page)
-        # for item in items:
-        #     self._add_item(item, page)
-        for item in items:
-            logging.info(f"Item {item} created from page {page}")
 
     def process_request(self, request):
         logging.info(f"Processing request {request}")
         try:
             html = self._downloader.download(request.page.url())
             output = request.page.parse(html)
-            last_timestamp = request.next_timestamp
+            last_updated_at = request.next_update_at
             if len(output._items) > 0:
-                self._produce_items(output._items, request.page)
+                self._item_store.set_items(output._items, request.page)
+                for item in output._items:
+                    logging.info(f"Item {item} created from page {request.page}")
             for page in output._pages:
-                new_request = PageRequest(page, last_timestamp, time.time())
+                new_request = PageRequest(page, last_updated_at, datetime.now())
                 self._add_request(new_request)
 
-            last_dt = datetime.fromtimestamp(last_timestamp)
-            next_dt = request.page.next_update(last_dt)
-            if next_dt is not None:
-                next_dt = next_dt.timestamp()
-                new_request = PageRequest(request.page, last_timestamp, next_dt)
+            next_update_at = request.page.next_update_at(last_updated_at)
+            if next_update_at is not None:
+                new_request = PageRequest(request.page, last_updated_at, next_update_at)
                 self._add_request(new_request, force=True)
             else:
                 self._request_queue.archive_page(request.page)
                 logging.info(f"Page {request.page} added to archived list")
 
-            self._end_request(request)
+            self._request_queue.end_request(request)
         except ParsingError as e:
-            self._fail_request(request, e.message, traceback.format_exc(), force=True)
+            self._request_queue.fail_request(request, e.message, traceback.format_exc(), force=True)
         except Exception as e:
-            self._fail_request(request, e.message, traceback.format_exc())
-
-        # last_dt = datetime.fromtimestamp(last_timestamp)
-        # next_dt = request.page.next_update(last_dt)
-        # if next_dt is not None:
-        #     next_dt = next_dt.timestamp()
-
-        # # @: what if the process stops here? request is closed but the next update is not registered yet
-        # if next_dt is not None:
-        #     new_request = PageRequest(request.page, last_timestamp, next_dt)
-        #     self._add_request(new_request, force=True)
-        # else:
-        #     self._forget_page(request.page)
-        #     logging.info(f"Page {request.page} added to forget list")
+            self._request_queue.fail_request(request, e.message, traceback.format_exc())
     
-    def sync(self):
-        self._load_state()
-        
+    def sync(self):        
         for page in self._root_pages:
-            self._add_request(PageRequest(page, None, time.time()))
+            self._add_request(PageRequest(page, None, datetime.now()))
         
         while True:
             request = self._request_queue.get_next_request()

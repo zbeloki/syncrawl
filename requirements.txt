@@ -1,5 +1,0 @@
-flask==3.0.3
-lxml==5.2.1
-requests==2.31.0
-pymongo==4.7.2
-pytest==8.2.0

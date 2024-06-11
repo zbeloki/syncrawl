@@ -1,3 +1,5 @@
+#!/usr/
+
 from flask import Flask, request, jsonify, render_template
 from flask_pymongo import PyMongo
 #from flask_restful import Api, Resource
@@ -34,5 +36,4 @@ def completed_requests():
     return render_template('completed_requests.gpt4.html', data=data)
 
 if __name__ == '__main__':
-
     app.run()

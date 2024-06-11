@@ -2,7 +2,6 @@ import requests
 from lxml import etree
 from pymongo import MongoClient
 
-from types import NoneType
 import hashlib
 import bisect
 from collections import deque
@@ -104,7 +103,7 @@ class JSONSerializable(abc.ABC):
 
     
 class Item(JSONSerializable):
-    accepted_types = [int, float, str, bool, list, dict, tuple, NoneType]
+    accepted_types = [int, float, str, bool, list, dict, tuple, type(None)]
     
     def __init__(self, id_, type_, attribs={}):
         self._id = id_
@@ -169,7 +168,7 @@ class Key(JSONSerializable):
 
     
 class Page(JSONSerializable):
-    accepted_types = [int, float, str, bool, list, tuple, dict, NoneType]
+    accepted_types = [int, float, str, bool, list, tuple, dict, type(None)]
     _registry = {}
     
     def __init__(self, key=None, **kwargs):

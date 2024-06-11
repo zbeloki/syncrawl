@@ -1,6 +1,9 @@
+from .routes import main_bp
+
 from flask import Flask, request, jsonify, render_template
 from flask_pymongo import PyMongo
 from pymongo import MongoClient
+from markupsafe import Markup
 
 from datetime import datetime, timedelta
 import json
@@ -19,18 +22,34 @@ def create_app():
     with open(config_path) as f:
         config = json.load(f)
     app.config.update(config)
-    app.config["MONGO_URI"] = f"mongodb://{app.config['DB_HOST']}:{app.config['DB_PORT']}/{app.config['DB_NAME']}"
+    app.config['MONGO_URI'] = f"mongodb://{app.config['DB_HOST']}:{app.config['DB_PORT']}/{app.config['DB_NAME']}"
+    app.config['MONGO'] = PyMongo(app)
 
-    mongo = PyMongo(app)
+    app.jinja_env.filters['format_key'] = jinja_filter__format_key
+    app.jinja_env.filters['format_datetime'] = jinja_filter__format_datetime
 
-    @app.route('/')
-    def home():
-        data = mongo.db.request_queue.find({"status": "pending"}).sort("payload.next_update_at", 1)
-        return render_template('index.html', data=data)
-
-    @app.route('/completed')
-    def completed_requests():
-        data = mongo.db.request_queue.find({"status": "completed"}).sort("payload.last_updated_at", -1)
-        return render_template('completed_requests.gpt4.html', data=data)
-
+    app.register_blueprint(main_bp)
+    
     return app
+
+def jinja_filter__format_key(value):
+    if value is None:
+        return ""
+    items = ', '.join(f'<strong>{key}</strong>: {val}' for key, val in value.items())
+    return Markup(items)
+
+def jinja_filter__format_datetime(value):
+    now = datetime.now()
+    today = now.date()
+    tomorrow = today + timedelta(days=1)
+    value_date = value.date()
+    
+    if value_date == today:
+        formatted = value.strftime("%H:%M")
+    elif value_date == tomorrow:
+        formatted = "tomorrow"
+    else:
+        formatted = value.strftime("%Y-%m-%d")
+    
+    full_datetime = value.strftime("%Y-%m-%d %H:%M:%S")
+    return Markup(f'<span title="{full_datetime}">{formatted}</span>')

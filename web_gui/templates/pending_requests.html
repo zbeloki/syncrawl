@@ -19,8 +19,8 @@
     <tr>
       <td>{{ loop.index }}</td>
       <td>{{ request["payload"]["page"]["page_name"] }}</td>
-      <td>{{ request["payload"]["page"]["key"] }}</td>
-      <td>{{ request["payload"]["next_update_at"] }}</td>
+      <td>{{ request["payload"]["page"]["key"] | format_key }}</td>
+      <td>{{ request["payload"]["next_update_at"] | format_datetime }}</td>
     </tr>
     {% endfor %}
   </table>

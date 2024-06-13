@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, current_app, redirect
+from flask import request, Blueprint, render_template, current_app, redirect
 
 import pdb
 
@@ -7,12 +7,29 @@ main_bp = Blueprint('main', __name__)
 @main_bp.route('/')
 def home():
     return redirect("/queue", code=302)
-    
-@main_bp.route('/queue')
+
+@main_bp.route('/queue', methods=['GET'])
 def request_queue():
+    page_name = request.args.get('page_name', '')
+    page_key = request.args.get('page_key', '')
+
     mongo = current_app.config['MONGO']
-    data = mongo.db.request_queue.find({"status": "pending"}).sort("payload.next_update_at", 1)
-    return render_template('pending_requests.html', data=data)
+    query_filter = {"status": "pending"}
+    if page_name.strip() != "":
+        query_filter["payload.page.page_name"] = page_name
+    data = mongo.db.request_queue.find(query_filter).sort("payload.next_update_at", 1)
+
+    format_key = current_app.jinja_env.filters['format_key']
+    search_match = lambda s, pattern: all([ token in s.lower() for token in pattern.lower().split() ])
+    data = [ d for d in data if search_match(format_key(d['payload']['page']['key']), page_key) ]
+    
+    available_page_names = mongo.db.request_queue.distinct("payload.page.page_name")
+    return render_template(
+        'pending_requests.html',
+        data=data,
+        page_names=available_page_names,
+        query_params=request.args,
+    )
 
 @main_bp.route('/completed')
 def completed_requests():

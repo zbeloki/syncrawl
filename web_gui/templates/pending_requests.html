@@ -5,30 +5,50 @@
 {% block title %}Syncrawl - Request queue{% endblock %}
 
 {% block content %}
-<table aria-label="Download requests">
-  <thead>
-    <tr>
-      <th scope="col">Pos.</th>
-      <th scope="col">Page name</th>
-      <th scope="col">Page key</th>
-      <th scope="col">Update at</th>
-      <th scope="col">Actions</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for request in data %}
-    <tr>
-      <td>{{ loop.index }}</td>
-      <td>{{ request["payload"]["page"]["page_name"] }}</td>
-      <td>{{ request["payload"]["page"]["key"] | format_key }}</td>
-      <td>{{ request["payload"]["next_update_at"] | format_datetime }}</td>
-      <td>
-	{{ macros.page_link_icon(request["payload"]["page"]) }}
-	{{ macros.update_link_icon() }}
-	{{ macros.archive_link_icon() }}
-      </td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
+<form method="GET" action="{{ url_for('main.request_queue') }}">
+  <table aria-label="Download requests">
+    <thead>
+      <tr>
+	<th scope="col">Pos.</th>
+	<th scope="col">Page name</th>
+	<th scope="col">Page key</th>
+	<th scope="col">Update at</th>
+	<th scope="col">Actions</th>
+      </tr>
+      <tr>
+	<th></th>
+	<th>
+	  <select name="page_name" id="filter-page-name">
+	    <option value="">-- Select --</option>
+            {% for name in page_names %}
+            <option value="{{ name }}" {% if name == query_params.get('page_name') %}selected{% endif %}>{{ name }}</option>
+            {% endfor %}
+          </select>
+	</th>
+	<th>
+	  <input type="text" name="page_key" id="filter-page-key" value="{{ query_params.get('page_key', '') }}" placeholder="Filter">
+	</th>
+	<th></th>
+	<th>
+          <button type="submit">Apply Filters</button>
+	</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for request in data %}
+      <tr>
+	<td>{{ loop.index }}</td>
+	<td>{{ request["payload"]["page"]["page_name"] }}</td>
+	<td>{{ request["payload"]["page"]["key"] | format_key }}</td>
+	<td>{{ request["payload"]["next_update_at"] | format_datetime }}</td>
+	<td>
+	  {{ macros.page_link_icon(request["payload"]["page"]) }}
+	  {{ macros.update_link_icon() }}
+	  {{ macros.archive_link_icon() }}
+	</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</form>
 {% endblock %}

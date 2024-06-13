@@ -1,5 +1,7 @@
 {% extends 'base.html' %}
 
+{% import 'macros.html' as macros %}
+
 {% block title %}Failed requests{% endblock %}
 
 {% block content %}
@@ -10,6 +12,7 @@
       <th scope="col">Page key</th>
       <th scope="col">Error message</th>
       <th scope="col">Failed at</th>
+      <th scope="col">Actions</th>
     </tr>
   </thead>
   <tbody>
@@ -28,6 +31,11 @@
       </td>
       <td>
 	{{ request["payload"]["last_updated_at"] | format_datetime }}
+      </td>
+      <td>
+	{{ macros.page_link_icon(request["payload"]["page"]) }}
+	{{ macros.retry_link_icon() }}
+	{{ macros.archive_link_icon() }}
       </td>
     </tr>
     {% endfor %}

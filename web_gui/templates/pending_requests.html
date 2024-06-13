@@ -1,5 +1,7 @@
 {% extends 'base.html' %}
 
+{% import 'macros.html' as macros %}
+
 {% block title %}Syncrawl - Request queue{% endblock %}
 
 {% block content %}
@@ -10,6 +12,7 @@
       <th scope="col">Page name</th>
       <th scope="col">Page key</th>
       <th scope="col">Update at</th>
+      <th scope="col">Actions</th>
     </tr>
   </thead>
   <tbody>
@@ -19,6 +22,11 @@
       <td>{{ request["payload"]["page"]["page_name"] }}</td>
       <td>{{ request["payload"]["page"]["key"] | format_key }}</td>
       <td>{{ request["payload"]["next_update_at"] | format_datetime }}</td>
+      <td>
+	{{ macros.page_link_icon(request["payload"]["page"]) }}
+	{{ macros.update_link_icon() }}
+	{{ macros.archive_link_icon() }}
+      </td>
     </tr>
     {% endfor %}
   </tbody>

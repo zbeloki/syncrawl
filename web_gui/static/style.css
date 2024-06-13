@@ -88,6 +88,11 @@ tbody td:first-of-type {
     border-left: 1px solid #d0d0d0;
 }
 
+tbody a {
+    color: #000000;
+    text-decoration: none;
+}
+
 /* Responsive styling */
 @media (max-width: 600px) {
     nav ul {

@@ -1,5 +1,7 @@
 {% extends 'base.html' %}
 
+{% import 'macros.html' as macros %}
+
 {% block title %}Archived pages{% endblock %}
 
 {% block content %}
@@ -9,6 +11,7 @@
       <th scope="col">Page name</th>
       <th scope="col">Page key</th>
       <th scope="col">Archived at</th>
+      <th scope="col">Actions</th>
     </tr>
   </thead>
   <tbody>
@@ -17,6 +20,10 @@
       <td>{{ page["page_name"] }}</td>
       <td>{{ page["key"] | format_key }}</td>
       <td>{{ page["archived_at"] | format_datetime }}</td>
+      <td>
+	{{ macros.page_link_icon(page) }}
+	{{ macros.restore_link_icon() }}
+      </td>
     </tr>
     {% endfor %}
   </tbody>

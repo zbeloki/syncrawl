@@ -1,5 +1,7 @@
 {% extends 'base.html' %}
 
+{% import 'macros.html' as macros %}
+
 {% block title %}Crawled data{% endblock %}
 
 {% block content %}
@@ -10,7 +12,8 @@
       <th scope="col">Data</th>
       <th scope="col">Page name</th>
       <th scope="col">Page key</th>
-      <th scope="col">Archived at</th>
+      <th scope="col">Crawled at</th>
+      <th scope="col">Actions</th>
     </tr>
   </thead>
   <tbody>
@@ -21,6 +24,9 @@
       <td>{{ item["page"]["page_name"] }}</td>
       <td>{{ item["page"]["key"] | format_key }}</td>
       <td>{{ item["parsed_at"] | format_datetime }}</td>
+      <td>
+	{{ macros.page_link_icon(item["page"]) }}
+      </td>
     </tr>
     {% endfor %}
   </tbody>

@@ -1,0 +1,37 @@
+{% macro page_link_icon(page) %}
+<a href="{{ page["url"] }}" target="_blank">
+  <i class="fas fa-external-link-alt" title="Link to the page"></i>
+</a>
+{% endmacro %}
+
+{% macro data_link_icon() %}
+<a href="">
+  <i class="fas fa-database" title="Crawled data"></i>
+</a>
+{% endmacro %}
+
+{% macro update_link_icon() %}
+<a href="">
+  <i class="fas fa-repeat" title="Crawl again now"></i>
+</a>
+{% endmacro %}
+
+{% macro retry_link_icon() %}
+<a href="">
+  <i class="fas fa-redo" title="Retry"></i>
+</a>
+{% endmacro %}
+
+{% macro archive_link_icon() %}
+<a href="">
+  <i class="fas fa-times" title="Archive page"></i>
+</a>
+{% endmacro %}
+
+{% macro restore_link_icon() %}
+<a href="">
+  <i class="fas fa-reply" title="Restore page"></i>
+</a>
+{% endmacro %}
+
+    

@@ -227,6 +227,7 @@ class Page(JSONSerializable):
             "page_name": self.page_name,
             "key": self.key.to_json() if self.key is not None else None,
             "attributes": self._attribs,
+            "url": self.url(),
         }
 
     @classmethod
@@ -297,10 +298,7 @@ class ItemStore:
         })
         item_jsons = [ {
             "item": item.to_json(),
-            "page": {
-                "page_name": page.to_json()["page_name"],
-                "key": page.to_json()["key"],
-            },
+            "page": page.to_json(),
             "parsed_at": datetime.now(),
         } for item in items ]
         self._is.insert_many(item_jsons)
@@ -374,11 +372,9 @@ class RequestQueue:
         )
 
     def archive_page(self, page):
-        self._ap.insert_one({
-            "page_name": page.to_json()["page_name"],
-            "key": page.to_json()["key"],
-            "archived_at": datetime.now(),
-        })
+        page_obj = page.to_json()
+        page_obj["archived_at"] = datetime.now()
+        self._ap.insert_one(page_obj)
 
     def is_page_archived(self, page):
         return self._ap.count_documents({

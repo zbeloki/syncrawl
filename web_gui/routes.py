@@ -20,6 +20,12 @@ def completed_requests():
     data = mongo.db.request_queue.find({"status": "completed"}).sort("payload.last_updated_at", -1)
     return render_template('completed_requests.html', data=data)
 
+@main_bp.route('/failed')
+def failed_requests():
+    mongo = current_app.config['MONGO']
+    data = mongo.db.request_queue.find({"status": "failed"}).sort("payload.last_updated_at", -1)
+    return render_template('failed_requests.html', data=data)
+
 @main_bp.route('/archived')
 def archived_pages():
     mongo = current_app.config['MONGO']

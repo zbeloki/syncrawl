@@ -1,0 +1,51 @@
+{% extends 'base.html' %}
+
+{% block title %}Failed requests{% endblock %}
+
+{% block content %}
+<table aria-label="Failed requests">
+  <thead>
+    <tr>
+      <th scope="col">Page name</th>
+      <th scope="col">Page key</th>
+      <th scope="col">Error message</th>
+      <th scope="col">Failed at</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for request in data %}
+    <tr>
+      <td>{{ request["payload"]["page"]["page_name"] }}</td>
+      <td>{{ request["payload"]["page"]["key"] | format_key }}</td>
+      <td>
+	<div class="button-container">
+          <span class="error-message">{{ request["error_msg"] }}</span>
+          <span class="button-wrapper">
+            <button class="toggle-btn" onclick="toggleTraceback('traceback{{ loop.index }}')">Show traceback</button>
+          </span>
+        </div>
+        <div id="traceback{{ loop.index }}" class="traceback">{{ request["error_traceback"] }}</div>
+      </td>
+      <td>
+	{{ request["payload"]["last_updated_at"] | format_datetime }}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<script>
+  function toggleTraceback(id) {
+      var element = document.getElementById(id);
+      var button = document.querySelector('button[onclick="toggleTraceback(\'' + id + '\')"]');
+      if (element.style.display === "none" || element.style.display === "") {
+          element.style.display = "block";
+          button.textContent = "Hide traceback";
+      } else {
+          element.style.display = "none";
+          button.textContent = "Show traceback";
+      }
+  }
+</script>
+{% endblock %}
+

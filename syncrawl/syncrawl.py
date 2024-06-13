@@ -508,9 +508,9 @@ class Crawler:
 
             self._request_queue.end_request(request)
         except ParsingError as e:
-            self._request_queue.fail_request(request, e.message, traceback.format_exc(), force=True)
+            self._request_queue.fail_request(request, str(e), traceback.format_exc(), force=True)
         except Exception as e:
-            self._request_queue.fail_request(request, e.message, traceback.format_exc())
+            self._request_queue.fail_request(request, str(e), traceback.format_exc())
     
     def sync(self):        
         for page in self._root_pages:

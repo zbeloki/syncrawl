@@ -5,28 +5,38 @@
 {% block title %}Completed requests{% endblock %}
 
 {% block content %}
-<table aria-label="Completed requests">
-  <thead>
-    <tr>
-      <th scope="col">Page name</th>
-      <th scope="col">Page key</th>
-      <th scope="col">Crawled at</th>
-      <th scope="col">Actions</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for request in data %}
-    <tr>
-      <td>{{ request["payload"]["page"]["page_name"] }}</td>
-      <td>{{ request["payload"]["page"]["key"] | format_key }}</td>
-      <td>{{ request["payload"]["last_updated_at"] | format_datetime }}</td>
-      <td>
-	{{ macros.page_link_icon(request["payload"]["page"]) }}
-	{{ macros.data_link_icon() }}
-	{{ macros.archive_link_icon() }}
-      </td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
+<form method="GET" action="{{ url_for('main.completed_requests') }}">
+  <table aria-label="Completed requests">
+    <thead>
+      <tr>
+	<th scope="col">Page name</th>
+	<th scope="col">Page key</th>
+	<th scope="col">Crawled at</th>
+	<th scope="col">Actions</th>
+      </tr>
+      <tr>
+	<th>{{ macros.page_name_filter(page_names) }}</th>
+	<th>{{ macros.page_key_filter() }}</th>
+	<th></th>
+	<th>
+          <button type="submit">Apply Filters</button>
+	</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for request in data %}
+      <tr>
+	<td>{{ request["payload"]["page"]["page_name"] }}</td>
+	<td>{{ request["payload"]["page"]["key"] | format_key }}</td>
+	<td>{{ request["payload"]["last_updated_at"] | format_datetime }}</td>
+	<td>
+	  {{ macros.page_link_icon(request["payload"]["page"]) }}
+	  {{ macros.data_link_icon() }}
+	  {{ macros.archive_link_icon() }}
+	</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</form>
 {% endblock %}

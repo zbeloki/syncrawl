@@ -5,30 +5,52 @@
 {% block title %}Crawled data{% endblock %}
 
 {% block content %}
-<table aria-label="">
-  <thead>
-    <tr>
-      <th scope="col">Type</th>
-      <th scope="col">Data</th>
-      <th scope="col">Page name</th>
-      <th scope="col">Page key</th>
-      <th scope="col">Crawled at</th>
-      <th scope="col">Actions</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for item in data %}
-    <tr>
-      <td>{{ item["item"]["_type"] }}</td>
-      <td>{{ item["item"] | format_item }}</td>
-      <td>{{ item["page"]["page_name"] }}</td>
-      <td>{{ item["page"]["key"] | format_key }}</td>
-      <td>{{ item["parsed_at"] | format_datetime }}</td>
-      <td>
-	{{ macros.page_link_icon(item["page"]) }}
-      </td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
+<form method="GET" action="{{ url_for('main.data_items') }}">
+  <table aria-label="">
+    <thead>
+      <tr>
+	<th scope="col">Type</th>
+	<th scope="col">Data</th>
+	<th scope="col">Page name</th>
+	<th scope="col">Page key</th>
+	<th scope="col">Crawled at</th>
+	<th scope="col">Actions</th>
+      </tr>
+      <tr>
+	<th>
+	  <select name="item_type" id="filter-item-type">
+	    <option value="">-- Select --</option>
+	    {% for item_type in item_types %}
+	    <option value="{{ item_type }}" {% if item_type == request.args.get('item_type') %}selected{% endif %}>{{ item_type }}</option>
+	    {% endfor %}
+	  </select>
+	</th>
+	<th>
+	  <input type="text" name="item_pattern" id="filter-item" value="{{ request.args.get('item_pattern', '') }}" placeholder="Filter">
+	</th>
+	<th>{{ macros.page_name_filter(page_names) }}</th>
+	<th>{{ macros.page_key_filter() }}</th>
+	<th></th>
+	<th>
+          <button type="submit">Apply Filters</button>
+	</th>
+      </tr>
+
+    </thead>
+    <tbody>
+      {% for item in data %}
+      <tr>
+	<td>{{ item["item"]["_type"] }}</td>
+	<td>{{ item["item"] | format_item }}</td>
+	<td>{{ item["page"]["page_name"] }}</td>
+	<td>{{ item["page"]["key"] | format_key }}</td>
+	<td>{{ item["parsed_at"] | format_datetime }}</td>
+	<td>
+	  {{ macros.page_link_icon(item["page"]) }}
+	</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</form>
 {% endblock %}

@@ -34,4 +34,15 @@
 </a>
 {% endmacro %}
 
-    
+{% macro page_name_filter(page_names) %}
+<select name="page_name" id="filter-page-name">
+  <option value="">-- Select --</option>
+  {% for name in page_names %}
+  <option value="{{ name }}" {% if name == request.args.get('page_name') %}selected{% endif %}>{{ name }}</option>
+  {% endfor %}
+</select>
+{% endmacro %}
+
+{% macro page_key_filter() %}
+<input type="text" name="page_key" id="filter-page-key" value="{{ request.args.get('page_key', '') }}" placeholder="Filter">
+{% endmacro %}

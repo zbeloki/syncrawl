@@ -17,17 +17,8 @@
       </tr>
       <tr>
 	<th></th>
-	<th>
-	  <select name="page_name" id="filter-page-name">
-	    <option value="">-- Select --</option>
-            {% for name in page_names %}
-            <option value="{{ name }}" {% if name == query_params.get('page_name') %}selected{% endif %}>{{ name }}</option>
-            {% endfor %}
-          </select>
-	</th>
-	<th>
-	  <input type="text" name="page_key" id="filter-page-key" value="{{ query_params.get('page_key', '') }}" placeholder="Filter">
-	</th>
+	<th>{{ macros.page_name_filter(page_names) }}</th>
+	<th>{{ macros.page_key_filter() }}</th>
 	<th></th>
 	<th>
           <button type="submit">Apply Filters</button>

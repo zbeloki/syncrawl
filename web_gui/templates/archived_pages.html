@@ -5,27 +5,37 @@
 {% block title %}Archived pages{% endblock %}
 
 {% block content %}
-<table aria-label="">
-  <thead>
-    <tr>
-      <th scope="col">Page name</th>
-      <th scope="col">Page key</th>
-      <th scope="col">Archived at</th>
-      <th scope="col">Actions</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for page in data %}
-    <tr>
-      <td>{{ page["page_name"] }}</td>
-      <td>{{ page["key"] | format_key }}</td>
-      <td>{{ page["archived_at"] | format_datetime }}</td>
-      <td>
-	{{ macros.page_link_icon(page) }}
-	{{ macros.restore_link_icon() }}
-      </td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
+<form method="GET" action="{{ url_for('main.archived_pages') }}">
+  <table aria-label="">
+    <thead>
+      <tr>
+	<th scope="col">Page name</th>
+	<th scope="col">Page key</th>
+	<th scope="col">Archived at</th>
+	<th scope="col">Actions</th>
+      </tr>
+      <tr>
+	<th>{{ macros.page_name_filter(page_names) }}</th>
+	<th>{{ macros.page_key_filter() }}</th>
+	<th></th>
+	<th>
+          <button type="submit">Apply Filters</button>
+	</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for page in data %}
+      <tr>
+	<td>{{ page["page_name"] }}</td>
+	<td>{{ page["key"] | format_key }}</td>
+	<td>{{ page["archived_at"] | format_datetime }}</td>
+	<td>
+	  {{ macros.page_link_icon(page) }}
+	  {{ macros.restore_link_icon() }}
+	</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</form>
 {% endblock %}

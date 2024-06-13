@@ -165,6 +165,7 @@ tbody a {
 
 .button-container .error-message {
     flex-grow: 1;
+    color: #aa0000;
 }
 
 .button-container .button-wrapper {

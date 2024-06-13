@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+
+{% block title %}Archived pages{% endblock %}
+
+{% block content %}
+<table aria-label="">
+  <thead>
+    <tr>
+      <th scope="col">Page name</th>
+      <th scope="col">Page key</th>
+      <th scope="col">Archived at</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for page in data %}
+    <tr>
+      <td>{{ page["page_name"] }}</td>
+      <td>{{ page["key"] | format_key }}</td>
+      <td>{{ page["archived_at"] | format_datetime }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

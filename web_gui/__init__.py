@@ -26,6 +26,7 @@ def create_app():
     app.config['MONGO'] = PyMongo(app)
 
     app.jinja_env.filters['format_key'] = jinja_filter__format_key
+    app.jinja_env.filters['format_item'] = jinja_filter__format_item
     app.jinja_env.filters['format_datetime'] = jinja_filter__format_datetime
 
     app.register_blueprint(main_bp)
@@ -38,18 +39,27 @@ def jinja_filter__format_key(value):
     items = ', '.join(f'<strong>{key}</strong>: {val}' for key, val in value.items())
     return Markup(items)
 
+def jinja_filter__format_item(value):
+    items = ', '.join(f'<strong>{key}</strong>: {val}' for key, val in value.items() if key != '_type')
+    return Markup(items)
+
 def jinja_filter__format_datetime(value):
+    if value is None:
+        return ""
     now = datetime.now()
     today = now.date()
-    tomorrow = today + timedelta(days=1)
-    value_date = value.date()
     
-    if value_date == today:
-        formatted = value.strftime("%H:%M")
-    elif value_date == tomorrow:
+    if value.date() == today:
+        formatted = value.strftime("Today, %H:%M")
+    elif value.date() == today + timedelta(days=1):
         formatted = "tomorrow"
+    elif value.date() == today - timedelta(days=1):
+        formatted = "yesterday"
     else:
-        formatted = value.strftime("%Y-%m-%d")
+        _format = "%B %d"
+        if value.year != now.year:
+            _format += ", %Y"
+        formatted = value.strftime(_format)
     
     full_datetime = value.strftime("%Y-%m-%d %H:%M:%S")
     return Markup(f'<span title="{full_datetime}">{formatted}</span>')

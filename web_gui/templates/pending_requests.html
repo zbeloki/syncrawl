@@ -1,20 +1,18 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>My Flask App</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-</head>
-<body>
-  <h1>Welcome to My Flask App!</h1>
-  <table>
+{% extends 'base.html' %}
+
+{% block title %}Syncrawl - Request queue{% endblock %}
+
+{% block content %}
+<table aria-label="Download requests">
+  <thead>
     <tr>
-      <th>Pos.</th>
-      <th>Page name</th>
-      <th>Page key</th>
-      <th>Update at</th>
+      <th scope="col">Pos.</th>
+      <th scope="col">Page name</th>
+      <th scope="col">Page key</th>
+      <th scope="col">Update at</th>
     </tr>
+  </thead>
+  <tbody>
     {% for request in data %}
     <tr>
       <td>{{ loop.index }}</td>
@@ -23,6 +21,6 @@
       <td>{{ request["payload"]["next_update_at"] | format_datetime }}</td>
     </tr>
     {% endfor %}
-  </table>
-</body>
-</html>
+  </tbody>
+</table>
+{% endblock %}

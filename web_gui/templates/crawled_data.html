@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+
+{% block title %}Crawled data{% endblock %}
+
+{% block content %}
+<table aria-label="">
+  <thead>
+    <tr>
+      <th scope="col">Type</th>
+      <th scope="col">Data</th>
+      <th scope="col">Page name</th>
+      <th scope="col">Page key</th>
+      <th scope="col">Archived at</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for item in data %}
+    <tr>
+      <td>{{ item["item"]["_type"] }}</td>
+      <td>{{ item["item"] | format_item }}</td>
+      <td>{{ item["page"]["page_name"] }}</td>
+      <td>{{ item["page"]["key"] | format_key }}</td>
+      <td>{{ item["parsed_at"] | format_datetime }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

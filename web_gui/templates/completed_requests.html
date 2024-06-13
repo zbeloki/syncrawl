@@ -1,26 +1,24 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>My Flask App</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-</head>
-<body>
-  <h1>Welcome to My Flask App!</h1>
-  <table>
+{% extends 'base.html' %}
+
+{% block title %}Completed requests{% endblock %}
+
+{% block content %}
+<table aria-label="Completed requests">
+  <thead>
     <tr>
-      <th>Page name</th>
-      <th>Page key</th>
-      <th>Crawled at</th>
+      <th scope="col">Page name</th>
+      <th scope="col">Page key</th>
+      <th scope="col">Crawled at</th>
     </tr>
+  </thead>
+  <tbody>
     {% for request in data %}
     <tr>
       <td>{{ request["payload"]["page"]["page_name"] }}</td>
-      <td>{{ request["payload"]["page"]["key"] }}</td>
-      <td>{{ request["payload"]["last_updated_at"] }}</td>
+      <td>{{ request["payload"]["page"]["key"] | format_key }}</td>
+      <td>{{ request["payload"]["last_updated_at"] | format_datetime }}</td>
     </tr>
     {% endfor %}
-  </table>
-</body>
-</html>
+  </tbody>
+</table>
+{% endblock %}

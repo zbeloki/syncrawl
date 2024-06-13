@@ -301,6 +301,7 @@ class ItemStore:
                 "page_name": page.to_json()["page_name"],
                 "key": page.to_json()["key"],
             },
+            "parsed_at": datetime.now(),
         } for item in items ]
         self._is.insert_many(item_jsons)
 
@@ -376,6 +377,7 @@ class RequestQueue:
         self._ap.insert_one({
             "page_name": page.to_json()["page_name"],
             "key": page.to_json()["key"],
+            "archived_at": datetime.now(),
         })
 
     def is_page_archived(self, page):
